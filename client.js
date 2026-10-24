@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
     } catch { createPortal = null }
 
     const ENDPOINT = '/api/dsh-compaction-control'
-    const VERSION = '0.1.2'
+    const VERSION = '0.1.3'
     /** 与内置 ContextMeter 相同的环几何：14px viewBox，2px 描边。 */
     const RADIUS = 5.5
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS
@@ -86,23 +86,22 @@ window.__ModuleLoader__.load({
 .dsh-cc-head-pct { font-weight: 500; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9)); }
 .dsh-cc-head-fig { margin-left: auto; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9)); }
 
-.dsh-cc-bar { display: flex; gap: 1px; margin: 10px 0 12px; height: 4px; border-radius: 999px; background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); overflow: hidden; }
+.dsh-cc-bar { display: flex; gap: 1px; margin: 8px 0 8px; height: 4px; border-radius: 999px; background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); overflow: hidden; }
 .dsh-cc-bar-seg { flex: none; min-width: 2px; height: 100%; border-radius: 1px; background: var(--dsh-cc-tint, var(--dsw-alias-label-tertiary)); }
 .dsh-cc-tint-system { --dsh-cc-tint: var(--dsw-static-neutral-bluish-400, #9db2c8); }
 .dsh-cc-tint-tools { --dsh-cc-tint: rgb(167, 139, 250); }
 .dsh-cc-tint-messages { --dsh-cc-tint: var(--dsw-static-blue-450, #5b8def); }
 
-.dsh-cc-rows { margin: 6px 0 0; }
-.dsh-cc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 0; }
+.dsh-cc-rows { margin: 4px 0 0; }
+.dsh-cc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 1px 0; }
 .dsh-cc-row dt { color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72)); }
 .dsh-cc-row dd { margin: 0; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9)); }
 .dsh-cc-dot { display: inline-block; margin-right: 6px; width: 8px; height: 8px; border-radius: 2px; background: var(--dsh-cc-tint); vertical-align: baseline; }
 
-.dsh-cc-section { border-top: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.08)); margin-top: 10px; padding-top: 8px; }
-.dsh-cc-title { margin-bottom: 6px; font-size: 11px; line-height: 16px; letter-spacing: 0.02em; color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.55)); }
+.dsh-cc-section { border-top: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.08)); margin-top: 8px; padding-top: 6px; }
 
 .dsh-cc-compact-btn, .dsh-cc-save {
-  width: 100%; height: 26px;
+  width: 100%; height: 24px;
   border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
   border-radius: var(--dsw-radius-sm, 8px);
   background: transparent;
@@ -114,7 +113,7 @@ window.__ModuleLoader__.load({
 .dsh-cc-compact-btn:hover, .dsh-cc-save:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); }
 .dsh-cc-compact-btn[disabled], .dsh-cc-save[disabled] { opacity: 0.5; cursor: default; }
 
-.dsh-cc-field { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 12px; line-height: 20px; }
+.dsh-cc-field { display: flex; align-items: center; gap: 8px; padding: 1px 0; font-size: 12px; line-height: 20px; }
 .dsh-cc-field-label { flex: none; width: 56px; color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.55)); }
 .dsh-cc-field-value { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9)); min-width: 30px; text-align: right; }
 .dsh-cc-slider { flex: 1; height: 2px; accent-color: var(--dsw-static-blue-450, #5b8def); cursor: pointer; }
@@ -122,8 +121,7 @@ window.__ModuleLoader__.load({
 .dsh-cc-hint { font-size: 11px; line-height: 16px; color: rgb(234, 179, 8); margin: 2px 0 4px; display: none; }
 .dsh-cc-hint-show { display: block; }
 
-.dsh-cc-note { margin-top: 8px; font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.45)); }
-.dsh-cc-flash { margin-top: 8px; font-size: 11px; line-height: 16px; border-radius: var(--dsw-radius-sm, 8px); padding: 5px 8px; display: none; }
+.dsh-cc-flash { margin-top: 6px; font-size: 11px; line-height: 16px; border-radius: var(--dsw-radius-sm, 8px); padding: 4px 8px; display: none; }
 .dsh-cc-flash-ok { display: block; background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72)); }
 .dsh-cc-flash-err { display: block; background: rgba(239, 68, 68, 0.12); color: #fca5a5; }
 `
@@ -358,10 +356,7 @@ window.__ModuleLoader__.load({
             setFlash({ kind: 'err', text: data?.error ?? `保存失败（HTTP ${res.status}）` })
           } else {
             setSettings({ ...settings, state: data.state, profiles: data.profiles })
-            setFlash({
-              kind: 'ok',
-              text: `已保存并写入 ${data.profiles?.length ? data.profiles.join('、') : '0 个'} profile 的补丁层，重启 dsh 后生效`,
-            })
+            setFlash({ kind: 'ok', text: '已保存，重启 dsh 后生效' })
           }
         } catch (err) {
           setFlash({ kind: 'err', text: `请求失败：${String(err?.message ?? err)}` })
@@ -393,13 +388,10 @@ window.__ModuleLoader__.load({
           : null,
 
         h('div', { className: 'dsh-cc-section' },
-          h('div', { className: 'dsh-cc-title' }, '手动压缩'),
           h('button', { type: 'button', className: 'dsh-cc-compact-btn', disabled: busy, onClick: onCompact },
-            busy ? '正在压缩…' : '立即压缩当前会话'),
-          h('div', { className: 'dsh-cc-note' }, '仅空闲会话可压缩；等价于官方 /compact 命令。')),
+            busy ? '正在压缩…' : '立即压缩当前会话')),
 
         h('div', { className: 'dsh-cc-section' },
-          h('div', { className: 'dsh-cc-title' }, '自动压缩'),
           h('div', { className: 'dsh-cc-field' },
             h('span', { className: 'dsh-cc-field-label' }, '启用'),
             h('input', {
@@ -435,10 +427,7 @@ window.__ModuleLoader__.load({
             }),
             h('span', { className: 'dsh-cc-field-value' }, draft?.hideBuiltIn === false ? '显示' : '已隐藏')),
           h('button', { type: 'button', className: 'dsh-cc-save', disabled: saving || !draft, onClick: onSave },
-            saving ? '保存中…' : '保存设置'),
-          h('div', { className: 'dsh-cc-note' },
-            `参数写入 profile 用户补丁层（compaction-basic），重启 dsh 后生效。当前默认：阈值 80%、保留 16%。`,
-            settings?.profiles?.length ? `挂载 profile：${settings.profiles.join('、')}。` : '')),
+            saving ? '保存中…' : '保存设置')),
 
         flash ? h('div', { className: `dsh-cc-flash dsh-cc-flash-${flash.kind}` }, flash.text) : null)
 
