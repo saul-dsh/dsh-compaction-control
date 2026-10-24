@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
     } catch { createPortal = null }
 
     const ENDPOINT = '/api/dsh-compaction-control'
-    const VERSION = '0.1.6'
+    const VERSION = '0.1.7'
     /** 与内置 ContextMeter 相同的环几何：14px viewBox，2px 描边。 */
     const RADIUS = 5.5
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS
@@ -235,13 +235,40 @@ window.__ModuleLoader__.load({
       ))
     }
 
-    /** 把 host 节点插到模型选择器紧左边，复制其 flex order（等 order 时按 DOM 序，两种布局都成立）。 */
+    /** 几何校正：把 host 拉到锚点按钮的左缘 + 垂直中线（只在错位时动）。 */
+    function correctHost(host) {
+      const anchor = findModelButton()
+      if (!anchor) return
+      host.style.transform = ''
+      const a = anchor.getBoundingClientRect()
+      const r = host.getBoundingClientRect()
+      let dx = 0
+      let dy = 0
+      if (a.height > 0 && r.height > 0) {
+        const centerDelta = a.top + a.height / 2 - (r.top + r.height / 2)
+        if (Math.abs(centerDelta) >= 2) dy = Math.round(centerDelta)
+      }
+      // 横向只在错位时校正：与按钮重叠、或离按钮左缘超过 24px（列容器会把
+      // host 甩到容器左缘）。正常 flex 行的 12px gap 不动。
+      if (a.width > 0 && r.width > 0) {
+        const gap = a.left - r.right
+        if (gap < -1 || gap > 24) dx = Math.round(a.left - r.right - 4)
+      }
+      if (dx !== 0 || dy !== 0) host.style.transform = `translate(${dx}px, ${dy}px)`
+    }
+
+    /**
+     * 把 host 节点插到模型选择器紧左边，复制其 flex order（等 order 时按 DOM 序）。
+     * 这个运行时模型按钮的父容器不保证是工具条 flex 行（实测会把圆环顶到
+     * 上一行），所以插入后做几何自校正——不依赖任何容器布局假设。
+     */
     function anchorHost(host) {
       const anchor = findModelButton()
       if (!anchor?.parentNode) return false
       const order = getComputedStyle(anchor).order
       if (order && order !== '0') host.style.order = order
       anchor.parentNode.insertBefore(host, anchor)
+      correctHost(host)
       return true
     }
 
@@ -317,12 +344,16 @@ window.__ModuleLoader__.load({
           ;(dock?.parentNode ?? document.body).appendChild(hostNode)
         }
         setHost(hostNode)
-        const observer = new MutationObserver(() => {
+        const reposition = () => {
           if (!hostNode.isConnected) anchored = anchorHost(hostNode)
-        })
+          else correctHost(hostNode)
+        }
+        const observer = new MutationObserver(reposition)
         observer.observe(document.body, { childList: true, subtree: true })
+        window.addEventListener('resize', reposition)
         return () => {
           observer.disconnect()
+          window.removeEventListener('resize', reposition)
           hostNode.remove()
           setHost(null)
         }
