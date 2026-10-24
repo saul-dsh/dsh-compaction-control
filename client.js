@@ -37,10 +37,11 @@ window.__ModuleLoader__.load({
     } catch { createPortal = null }
 
     const ENDPOINT = '/api/dsh-compaction-control'
-    const VERSION = '0.1.7'
-    /** 与内置 ContextMeter 相同的环几何：14px viewBox，2px 描边。 */
+    const VERSION = '0.1.8'
+    /** 官方环几何 14px viewBox / 2 单位描边；纯图标无百分比文字撑视觉重量，渲染尺寸放大到 18px（描边随比例 ≈2.6px）。 */
     const RADIUS = 5.5
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS
+    const RING_SIZE = 18
     /** 官方面板宽度：min(264px, 100vw - 24px)。 */
     const PANEL_WIDTH = 264
 
@@ -50,10 +51,10 @@ window.__ModuleLoader__.load({
 .dsh-cc-root { display: inline-flex; }
 .dsh-cc-trigger {
   display: inline-flex; align-items: center; justify-content: center;
-  flex: none; padding: 2px 6px;
+  flex: none; height: 28px; padding: 0 6px;
   border: none; border-radius: var(--dsw-radius-sm, 8px);
   background: transparent;
-  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.55));
+  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
   font-family: inherit; line-height: 20px;
   cursor: pointer;
 }
@@ -62,7 +63,7 @@ window.__ModuleLoader__.load({
   color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
 }
 .dsh-cc-ring-track { fill: none; stroke: var(--dsw-alias-border-l3, rgba(255, 255, 255, 0.18)); stroke-width: 2; }
-.dsh-cc-ring-fill { fill: none; stroke: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.55)); stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray 200ms ease; }
+.dsh-cc-ring-fill { fill: none; stroke: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72)); stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray 200ms ease; }
 
 .dsh-cc-panel {
   position: fixed; z-index: 1100; box-sizing: border-box;
@@ -300,7 +301,7 @@ window.__ModuleLoader__.load({
     }
 
     function RingSvg({ percent }) {
-      return h('svg', { viewBox: '0 0 14 14', width: 14, height: 14, 'aria-hidden': true },
+      return h('svg', { viewBox: '0 0 14 14', width: RING_SIZE, height: RING_SIZE, 'aria-hidden': true },
         h('circle', { className: 'dsh-cc-ring-track', cx: 7, cy: 7, r: RADIUS }),
         h('circle', {
           className: 'dsh-cc-ring-fill',
