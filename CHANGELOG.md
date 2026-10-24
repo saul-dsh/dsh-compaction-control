@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.5 — 2026-10-24
+
+- 删掉「启用」开关：默认与官方一致（自动开），自定义只调触发阈值与
+  保留比例，保存后按用户值生效（auto 字段在状态里保留为 true）。
+- 「自定义压缩」折叠行改官方菜单行规格（28px、radius-sm、13px/20px
+  label-secondary、hover interactive-bg、caption 色箭头，对齐
+  ModelSelect trigger）；「恢复默认」改官方 ghost 行样式（去描边）。
+
 ## 0.1.4 — 2026-10-24
 
 - 「自定义压缩」折叠化：自动压缩的设置默认收起，点「自定义压缩 ▸」

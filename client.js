@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
     } catch { createPortal = null }
 
     const ENDPOINT = '/api/dsh-compaction-control'
-    const VERSION = '0.1.4'
+    const VERSION = '0.1.5'
     /** 与内置 ContextMeter 相同的环几何：14px viewBox，2px 描边。 */
     const RADIUS = 5.5
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS
@@ -102,15 +102,15 @@ window.__ModuleLoader__.load({
 
 .dsh-cc-disclose {
   display: flex; align-items: center; justify-content: space-between;
-  width: 100%; height: 22px; padding: 0 2px;
+  width: 100%; height: 28px; padding: 0 4px 0 8px;
   border: none; border-radius: var(--dsw-radius-sm, 8px);
   background: transparent;
-  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.55));
-  font-size: 12px; line-height: 20px;
+  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
+  font-size: 13px; line-height: 20px; font-weight: 400;
   cursor: pointer;
 }
-.dsh-cc-disclose:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72)); }
-.dsh-cc-caret { font-size: 10px; }
+.dsh-cc-disclose:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); }
+.dsh-cc-caret { color: var(--dsw-alias-label-caption, rgba(232, 238, 250, 0.45)); font-size: 12px; }
 
 .dsh-cc-compact-btn {
   width: 100%; height: 24px;
@@ -127,7 +127,7 @@ window.__ModuleLoader__.load({
 
 .dsh-cc-fields { margin-top: 4px; }
 .dsh-cc-btnrow { display: flex; gap: 6px; margin-top: 4px; }
-.dsh-cc-save, .dsh-cc-reset {
+.dsh-cc-save {
   flex: 1; height: 24px;
   border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
   border-radius: var(--dsw-radius-sm, 8px);
@@ -137,8 +137,19 @@ window.__ModuleLoader__.load({
   cursor: pointer;
   transition: background 120ms ease;
 }
-.dsh-cc-save:hover, .dsh-cc-reset:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); }
-.dsh-cc-save[disabled], .dsh-cc-reset[disabled] { opacity: 0.5; cursor: default; }
+.dsh-cc-save:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); }
+.dsh-cc-save[disabled] { opacity: 0.5; cursor: default; }
+/* 恢复默认：官方菜单行样式（ghost 行，hover 背景无描边） */
+.dsh-cc-reset {
+  flex: 1; height: 24px; padding: 0 4px;
+  border: none; border-radius: var(--dsw-radius-sm, 8px);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
+  font-size: 12px; line-height: 20px; font-weight: 400;
+  cursor: pointer;
+}
+.dsh-cc-reset:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); }
+.dsh-cc-reset[disabled] { opacity: 0.5; cursor: default; }
 
 .dsh-cc-field { display: flex; align-items: center; gap: 8px; padding: 1px 0; font-size: 12px; line-height: 20px; }
 .dsh-cc-field-label { flex: none; width: 56px; color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.55)); }
@@ -457,14 +468,6 @@ window.__ModuleLoader__.load({
           h('span', null, '自定义压缩'),
           h('span', { className: 'dsh-cc-caret' }, expanded ? '▾' : '▸')),
           expanded ? h('div', { className: 'dsh-cc-fields' },
-            h('div', { className: 'dsh-cc-field' },
-              h('span', { className: 'dsh-cc-field-label' }, '启用'),
-              h('input', {
-                type: 'checkbox', className: 'dsh-cc-check',
-                checked: draft?.auto ?? true,
-                onChange: (e) => setDraft({ ...draft, auto: e.target.checked }),
-              }),
-              h('span', { className: 'dsh-cc-field-value' }, draft?.auto === false ? '已关' : '开')),
             h('div', { className: 'dsh-cc-field' },
               h('span', { className: 'dsh-cc-field-label' }, '触发阈值'),
               h('input', {

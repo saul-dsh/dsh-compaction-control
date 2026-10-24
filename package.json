@@ -1,6 +1,6 @@
 {
   "name": "dsh-compaction-control",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Context-compaction control for the DeepSeek Harness (dsh) composer: a usage ring beside the model picker with one-click manual /compact and runtime tuning of compaction-basic's auto threshold via the profile patch layer.",
   "type": "module",
   "main": "index.js",
