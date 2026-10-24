@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
     } catch { createPortal = null }
 
     const ENDPOINT = '/api/dsh-compaction-control'
-    const VERSION = '0.1.0'
+    const VERSION = '0.1.1'
     /** 与内置 ContextMeter 相同的环几何：14px viewBox，2px 描边。 */
     const RADIUS = 5.5
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS
@@ -46,12 +46,12 @@ window.__ModuleLoader__.load({
     const CSS = `
 .dsh-cc-root { display: inline-flex; align-items: center; }
 .dsh-cc-trigger {
-  display: inline-flex; align-items: center; gap: 5px;
-  height: 26px; padding: 0 8px;
+  display: inline-flex; align-items: center;
+  width: 26px; height: 26px;
+  justify-content: center;
   border: none; border-radius: 8px;
   background: transparent;
   color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
-  font-size: 12px; line-height: 1;
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
 }
@@ -77,7 +77,8 @@ window.__ModuleLoader__.load({
   font-size: 13px;
   animation: dsh-cc-in 140ms ease-out both;
 }
-@keyframes dsh-cc-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+/* 只动 opacity：展开方向由内联 transform 控制，keyframes 不能碰 transform */
+@keyframes dsh-cc-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .dsh-cc-panel { animation: none; } }
 
 .dsh-cc-head { display: flex; align-items: baseline; gap: 6px; margin-bottom: 10px; }
@@ -272,13 +273,19 @@ window.__ModuleLoader__.load({
         return () => releaseDockHide()
       }, [draft?.hideBuiltIn])
 
-      // 面板定位 + 外点关闭 + Esc。
+      // 面板定位 + 外点关闭 + Esc。默认向上展开（translateY(-100%)）；
+      // 上方空间不足 460px 时才向下。外点关闭 + Esc。
       useEffect(() => {
         if (!open) return undefined
         const rect = rootRef.current?.getBoundingClientRect()
         if (rect) {
           const left = Math.max(8, Math.min(rect.right - PANEL_WIDTH, window.innerWidth - PANEL_WIDTH - 8))
-          setPos({ left, top: Math.max(8, rect.top - 8) })
+          const openUp = rect.top > 460
+          setPos({
+            left,
+            top: openUp ? rect.top - 8 : rect.bottom + 8,
+            transform: openUp ? 'translateY(-100%)' : 'none',
+          })
         }
         const onPointerDown = (e) => {
           const t = e.target
@@ -373,7 +380,13 @@ window.__ModuleLoader__.load({
         }
       }
 
-      const panel = h('div', { ref: panelRef, className: 'dsh-cc-panel', role: 'dialog', 'aria-label': '上下文压缩控制', style: pos ?? { visibility: 'hidden', left: 0, top: 0 } },
+      const panel = h('div', {
+        ref: panelRef,
+        className: 'dsh-cc-panel',
+        role: 'dialog',
+        'aria-label': '上下文压缩控制',
+        style: pos ? { left: pos.left, top: pos.top, transform: pos.transform } : { visibility: 'hidden', left: 0, top: 0 },
+      },
         h('div', { className: 'dsh-cc-head' },
           h('span', { className: 'dsh-cc-head-pct' }, `${context.percent}%`),
           h('span', { className: 'dsh-cc-head-label' }, '上下文已用'),
@@ -445,10 +458,10 @@ window.__ModuleLoader__.load({
           'aria-label': `上下文已用 ${context.percent}%，打开压缩控制`,
           'aria-haspopup': 'dialog',
           'aria-expanded': open,
+          title: `上下文已用 ${context.percent}%`,
           onClick: () => setOpen(!open),
         },
-        h(RingSvg, { percent: context.percent }),
-        h('span', null, `${context.percent}%`)),
+        h(RingSvg, { percent: context.percent })),
         open && createPortal ? createPortal(panel, document.body) : null)
     }
 
