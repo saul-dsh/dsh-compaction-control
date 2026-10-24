@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.9 — 2026-10-24
+
+修复「立即压缩」在新架构下 503：dsh 桌面端更新后 webServer 进程
+不再挂载 agents/compaction 服务，服务端 compactNow 桥接失效。
+
+- 「立即压缩」优先走**官方命令通道**：隐形 dock 槽位组件捕获
+  inputActions（followup 同款 props），setDraft('/compact') + 250ms
+  后 submit——命令由官方命令系统在 agent 宿主执行，结果以官方
+  chip 形式出现在对话流（ui-commands 保证未知命令不会当普通
+  消息发出）。
+- 服务端 POST /compact 降级为后备（未来运行时恢复同进程服务时
+  自动生效）。
+
 ## 0.1.8 — 2026-10-24
 
 - 圆环放大：14px → 18px（viewBox 不变，描边随比例 ≈2.6px），触发区

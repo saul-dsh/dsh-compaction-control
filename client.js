@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
     } catch { createPortal = null }
 
     const ENDPOINT = '/api/dsh-compaction-control'
-    const VERSION = '0.1.8'
+    const VERSION = '0.1.9'
     /** 官方环几何 14px viewBox / 2 单位描边；纯图标无百分比文字撑视觉重量，渲染尺寸放大到 18px（描边随比例 ≈2.6px）。 */
     const RADIUS = 5.5
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS
@@ -300,6 +300,34 @@ window.__ModuleLoader__.load({
       render() { return this.state.error ? null : this.props.children }
     }
 
+    // 官方命令通道：dock 槽位组件的标准 props 带 inputActions（followup
+    // 同款）。「立即压缩」优先把 /compact 落进草稿再 submit——命令在
+    // agent 宿主进程执行，不受本进程 webServer 无 agents 服务的影响。
+    let commandBridge = null
+
+    function CommandBridge(props) {
+      useEffect(() => {
+        commandBridge = props.inputActions ?? null
+        return () => { if (commandBridge === props.inputActions) commandBridge = null }
+      }, [props.inputActions])
+      return null
+    }
+
+    /** 走官方 /compact 命令（草稿→提交），返回是否已受理。 */
+    const compactViaCommand = () => {
+      if (!commandBridge) return false
+      try {
+        commandBridge.setDraft('/compact')
+        window.setTimeout(() => {
+          try { commandBridge.submit() } catch (err) { report('submit-error', { message: String(err?.message ?? err) }) }
+        }, 250)
+        return true
+      } catch (err) {
+        report('bridge-error', { message: String(err?.message ?? err) })
+        return false
+      }
+    }
+
     function RingSvg({ percent }) {
       return h('svg', { viewBox: '0 0 14 14', width: RING_SIZE, height: RING_SIZE, 'aria-hidden': true },
         h('circle', { className: 'dsh-cc-ring-track', cx: 7, cy: 7, r: RADIUS }),
@@ -440,6 +468,11 @@ window.__ModuleLoader__.load({
 
       const onCompact = async () => {
         if (busy) return
+        // 优先官方命令通道：结果以官方 chip 形式出现在对话流里。
+        if (compactViaCommand()) {
+          setFlash({ kind: 'ok', text: '已执行 /compact，结果见对话流' })
+          return
+        }
         setBusy(true)
         setFlash(null)
         try {
@@ -635,6 +668,12 @@ window.__ModuleLoader__.load({
               id: 'dsh-compaction-control',
               order: 0,
             }, (props) => h(QuietBoundary, null, h(Seat, props))))
+            // 隐形桥接：只为拿 inputActions（setDraft/submit），不渲染任何 UI。
+            scope.slots.inject('conversation.input.dock', () => scope.slots.register({
+              name: 'conversation.input.dock',
+              id: 'dsh-compaction-control-bridge',
+              order: 90,
+            }, (props) => h(QuietBoundary, null, h(CommandBridge, props))))
             report('register', {})
           }).catch((err) => report('gate-error', { message: String(err?.message ?? err) }))
         })
