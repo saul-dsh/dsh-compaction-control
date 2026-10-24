@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
     } catch { createPortal = null }
 
     const ENDPOINT = '/api/dsh-compaction-control'
-    const VERSION = '0.1.5'
+    const VERSION = '0.1.6'
     /** 与内置 ContextMeter 相同的环几何：14px viewBox，2px 描边。 */
     const RADIUS = 5.5
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS
@@ -46,6 +46,7 @@ window.__ModuleLoader__.load({
 
     /** 全部对齐官方 ContextMeter/菜单面板 tokens（ContextMeter.module.css 同源）。 */
     const CSS = `
+.dsh-cc-host { display: inline-flex; align-items: center; flex: none; }
 .dsh-cc-root { display: inline-flex; }
 .dsh-cc-trigger {
   display: inline-flex; align-items: center; justify-content: center;
@@ -215,6 +216,35 @@ window.__ModuleLoader__.load({
       return found
     }
 
+    /**
+     * 模型选择器按钮 = 输入区里视觉最靠右的下拉按钮（发送按钮按语义排除，
+     * prompt-enhancer 同款判别）。槽位顺序在这个运行时不可控，所以圆环
+     * 用自建 host 节点锚定到它紧左边。
+     */
+    function findModelButton() {
+      const dock = document.querySelector('[data-composer-dock]')
+      const scope = dock?.parentElement ?? document
+      const isSend = (b) => /send|发送|排队|steer/i.test(b.getAttribute('aria-label') ?? '')
+      const menus = [...scope.querySelectorAll('button')].filter((b) => {
+        if (isSend(b) || !b.isConnected) return false
+        return b.getAttribute('aria-haspopup') !== null || /▾/.test(b.textContent ?? '')
+      })
+      if (!menus.length) return null
+      return menus.reduce((right, b) => (
+        b.getBoundingClientRect().right > right.getBoundingClientRect().right ? b : right
+      ))
+    }
+
+    /** 把 host 节点插到模型选择器紧左边，复制其 flex order（等 order 时按 DOM 序，两种布局都成立）。 */
+    function anchorHost(host) {
+      const anchor = findModelButton()
+      if (!anchor?.parentNode) return false
+      const order = getComputedStyle(anchor).order
+      if (order && order !== '0') host.style.order = order
+      anchor.parentNode.insertBefore(host, anchor)
+      return true
+    }
+
     let hideObserver = null
     let hideRefcount = 0
     function acquireDockHide() {
@@ -271,8 +301,32 @@ window.__ModuleLoader__.load({
 
       const rootRef = useRef(null)
       const panelRef = useRef(null)
+      const [host, setHost] = useState(null)
 
       const context = occupancy(pressure)
+
+      // 宿主节点：锚定在模型选择器按钮紧左边（槽位顺序在此运行时不可控）。
+      // React 只渲染进我们自己的 host，host 本身由我们搬运，React 不知情，
+      // 重渲染不会打架；MutationObserver 在界面重建后把掉线的 host 接回去。
+      useEffect(() => {
+        const hostNode = document.createElement('span')
+        hostNode.className = 'dsh-cc-host'
+        let anchored = anchorHost(hostNode)
+        if (!anchored) {
+          const dock = document.querySelector('[data-composer-dock]')
+          ;(dock?.parentNode ?? document.body).appendChild(hostNode)
+        }
+        setHost(hostNode)
+        const observer = new MutationObserver(() => {
+          if (!hostNode.isConnected) anchored = anchorHost(hostNode)
+        })
+        observer.observe(document.body, { childList: true, subtree: true })
+        return () => {
+          observer.disconnect()
+          hostNode.remove()
+          setHost(null)
+        }
+      }, [])
 
       // 挂载即拉一次服务端状态：hideBuiltIn 要在用户打开面板前就生效。
       useEffect(() => {
@@ -336,7 +390,7 @@ window.__ModuleLoader__.load({
         return () => clearTimeout(timer)
       }, [flash])
 
-      if (context === null) return null
+      if (context === null || host === null || createPortal === null) return null
 
       const breakdownTotal = breakdown === undefined
         ? 0
@@ -503,18 +557,20 @@ window.__ModuleLoader__.load({
 
         flash ? h('div', { className: `dsh-cc-flash dsh-cc-flash-${flash.kind}` }, flash.text) : null)
 
-      return h('span', { ref: rootRef, className: 'dsh-cc-root' },
-        h('button', {
-          type: 'button',
-          className: 'dsh-cc-trigger',
-          'aria-label': `上下文已用 ${context.percent}%，打开压缩控制`,
-          'aria-haspopup': 'dialog',
-          'aria-expanded': open,
-          title: `上下文已用 ${context.percent}%`,
-          onClick: () => setOpen(!open),
-        },
-        h(RingSvg, { percent: context.percent })),
-        open && createPortal ? createPortal(panel, document.body) : null)
+      return createPortal(
+        h('span', { ref: rootRef, className: 'dsh-cc-root' },
+          h('button', {
+            type: 'button',
+            className: 'dsh-cc-trigger',
+            'aria-label': `上下文已用 ${context.percent}%，打开压缩控制`,
+            'aria-haspopup': 'dialog',
+            'aria-expanded': open,
+            title: `上下文已用 ${context.percent}%`,
+            onClick: () => setOpen(!open),
+          },
+          h(RingSvg, { percent: context.percent })),
+          open ? createPortal(panel, document.body) : null),
+        host)
     }
 
     return {
