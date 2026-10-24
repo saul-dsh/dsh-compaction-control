@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.2 — 2026-10-24
+
+面板样式整体对齐官方 ContextMeter（真机反馈：配色不统一、卡片太大）：
+
+- 卡片 330px → 官方 `min(264px, 100vw - 24px)`，内边距 14 → 12，
+  字号 13 → 12 / 行高 20，标题 20px 大数字改为官方单行头
+  （「上下文已用 3%」+ 右侧 ~已用/窗口）。
+- 背景/圆角/阴影/毛玻璃全部换官方 token：`--dsw-specific-menu`、
+  `--dsw-radius-lg`、`--dsw-elevation-prominent`、
+  `--dsw-menu-backdrop-filter`。
+- 三段构成色换官方 static token（bluish-400 / violet-400 / blue-450），
+  色点 8px/2px 圆角、行距 padding 2px，条 4px 高。
+- 圆环填充色改官方中性 `--dsw-alias-label-tertiary`（去掉自绘绿/黄/红）。
+- 按钮去掉绿色渐变，改官方描边按钮（border-l2 + hover interactive）；
+  滑条/开关 accent 换 `--dsw-static-blue-450`；小号提示 11px/16px。
+
 ## 0.1.1 — 2026-10-24
 
 修复真机反馈的两个 UI 问题：

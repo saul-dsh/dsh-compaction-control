@@ -37,104 +37,95 @@ window.__ModuleLoader__.load({
     } catch { createPortal = null }
 
     const ENDPOINT = '/api/dsh-compaction-control'
-    const VERSION = '0.1.1'
+    const VERSION = '0.1.2'
     /** 与内置 ContextMeter 相同的环几何：14px viewBox，2px 描边。 */
     const RADIUS = 5.5
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS
-    const PANEL_WIDTH = 330
+    /** 官方面板宽度：min(264px, 100vw - 24px)。 */
+    const PANEL_WIDTH = 264
 
+    /** 全部对齐官方 ContextMeter/菜单面板 tokens（ContextMeter.module.css 同源）。 */
     const CSS = `
-.dsh-cc-root { display: inline-flex; align-items: center; }
+.dsh-cc-root { display: inline-flex; }
 .dsh-cc-trigger {
-  display: inline-flex; align-items: center;
-  width: 26px; height: 26px;
-  justify-content: center;
-  border: none; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: none; padding: 2px 6px;
+  border: none; border-radius: var(--dsw-radius-sm, 8px);
   background: transparent;
-  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
+  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.55));
+  font-family: inherit; line-height: 20px;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
 }
-.dsh-cc-trigger:hover {
+.dsh-cc-trigger:hover, .dsh-cc-trigger[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
-  color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9));
+  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
 }
-.dsh-cc-ring-track { stroke: rgba(255, 255, 255, 0.18); fill: none; stroke-width: 2; }
-.dsh-cc-ring-fill { fill: none; stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray 200ms ease, stroke 200ms ease; }
-.dsh-cc-ring-ok { stroke: rgba(129, 201, 149, 0.95); }
-.dsh-cc-ring-warn { stroke: rgba(234, 179, 8, 0.95); }
-.dsh-cc-ring-hot { stroke: rgba(239, 68, 68, 0.95); }
+.dsh-cc-ring-track { fill: none; stroke: var(--dsw-alias-border-l3, rgba(255, 255, 255, 0.18)); stroke-width: 2; }
+.dsh-cc-ring-fill { fill: none; stroke: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.55)); stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray 200ms ease; }
 
 .dsh-cc-panel {
-  position: fixed; z-index: 1000;
-  width: ${PANEL_WIDTH}px; max-height: 70vh; overflow-y: auto;
-  padding: 14px 14px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(28, 28, 34, 0.97);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  color: rgba(232, 238, 250, 0.88);
-  font-size: 13px;
+  position: fixed; z-index: 1100; box-sizing: border-box;
+  width: min(264px, calc(100vw - 24px)); max-height: 70vh; overflow-y: auto;
+  padding: 12px;
+  border: 0; border-radius: var(--dsw-radius-lg, 14px);
+  background: var(--dsw-specific-menu, rgba(28, 28, 34, 0.97));
+  backdrop-filter: var(--dsw-menu-backdrop-filter, none);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.08));
+  box-shadow: var(--dsw-elevation-prominent, 0 12px 40px rgba(0, 0, 0, 0.45));
+  font-size: 12px; line-height: 20px;
+  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
+  cursor: default;
   animation: dsh-cc-in 140ms ease-out both;
 }
 /* 只动 opacity：展开方向由内联 transform 控制，keyframes 不能碰 transform */
 @keyframes dsh-cc-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .dsh-cc-panel { animation: none; } }
 
-.dsh-cc-head { display: flex; align-items: baseline; gap: 6px; margin-bottom: 10px; }
-.dsh-cc-head-pct { font-size: 20px; font-weight: 650; color: rgba(232, 238, 250, 0.95); }
-.dsh-cc-head-label { font-size: 12px; color: rgba(232, 238, 250, 0.55); }
-.dsh-cc-head-fig { margin-left: auto; font-size: 11.5px; color: rgba(232, 238, 250, 0.5); }
+.dsh-cc-head { display: flex; align-items: center; gap: 6px; }
+.dsh-cc-head-label { color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.55)); white-space: nowrap; }
+.dsh-cc-head-pct { font-weight: 500; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9)); }
+.dsh-cc-head-fig { margin-left: auto; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9)); }
 
-.dsh-cc-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: rgba(255, 255, 255, 0.1); margin-bottom: 8px; }
-.dsh-cc-bar-seg { height: 100%; }
-.dsh-cc-seg-system { background: rgba(129, 140, 248, 0.85); }
-.dsh-cc-seg-tools { background: rgba(45, 212, 191, 0.85); }
-.dsh-cc-seg-messages { background: rgba(244, 114, 182, 0.85); }
-.dsh-cc-rows { margin: 0 0 10px; display: grid; gap: 4px; }
-.dsh-cc-row { display: flex; align-items: center; gap: 7px; font-size: 12px; color: rgba(232, 238, 250, 0.68); }
-.dsh-cc-row dd { margin: 0 0 0 auto; font-variant-numeric: tabular-nums; color: rgba(232, 238, 250, 0.85); }
-.dsh-cc-dot { width: 8px; height: 8px; border-radius: 3px; flex: none; }
+.dsh-cc-bar { display: flex; gap: 1px; margin: 10px 0 12px; height: 4px; border-radius: 999px; background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); overflow: hidden; }
+.dsh-cc-bar-seg { flex: none; min-width: 2px; height: 100%; border-radius: 1px; background: var(--dsh-cc-tint, var(--dsw-alias-label-tertiary)); }
+.dsh-cc-tint-system { --dsh-cc-tint: var(--dsw-static-neutral-bluish-400, #9db2c8); }
+.dsh-cc-tint-tools { --dsh-cc-tint: rgb(167, 139, 250); }
+.dsh-cc-tint-messages { --dsh-cc-tint: var(--dsw-static-blue-450, #5b8def); }
 
-.dsh-cc-section { border-top: 1px solid rgba(255, 255, 255, 0.08); margin-top: 10px; padding-top: 10px; }
-.dsh-cc-title { font-size: 12px; font-weight: 600; color: rgba(232, 238, 250, 0.6); margin-bottom: 8px; letter-spacing: 0.02em; }
+.dsh-cc-rows { margin: 6px 0 0; }
+.dsh-cc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 0; }
+.dsh-cc-row dt { color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72)); }
+.dsh-cc-row dd { margin: 0; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9)); }
+.dsh-cc-dot { display: inline-block; margin-right: 6px; width: 8px; height: 8px; border-radius: 2px; background: var(--dsh-cc-tint); vertical-align: baseline; }
 
-.dsh-cc-compact-btn {
-  width: 100%; height: 32px;
-  border: none; border-radius: 9px;
-  background: linear-gradient(92deg, #6ee7b7 0%, #34d399 100%);
-  color: rgba(15, 23, 20, 0.92);
-  font-size: 13px; font-weight: 600;
-  cursor: pointer;
-  transition: filter 120ms ease, opacity 120ms ease;
-}
-.dsh-cc-compact-btn:hover { filter: brightness(1.08); }
-.dsh-cc-compact-btn[disabled] { opacity: 0.55; cursor: default; }
+.dsh-cc-section { border-top: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.08)); margin-top: 10px; padding-top: 8px; }
+.dsh-cc-title { margin-bottom: 6px; font-size: 11px; line-height: 16px; letter-spacing: 0.02em; color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.55)); }
 
-.dsh-cc-field { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; }
-.dsh-cc-field-label { flex: none; width: 64px; color: rgba(232, 238, 250, 0.65); }
-.dsh-cc-field-value { margin-left: auto; font-variant-numeric: tabular-nums; color: rgba(232, 238, 250, 0.85); min-width: 38px; text-align: right; }
-.dsh-cc-slider { flex: 1; accent-color: #34d399; height: 3px; cursor: pointer; }
-.dsh-cc-check { accent-color: #34d399; width: 14px; height: 14px; cursor: pointer; }
-.dsh-cc-hint { font-size: 11px; color: rgba(234, 179, 8, 0.85); margin: -4px 0 6px 72px; display: none; }
-.dsh-cc-hint-show { display: block; }
-
-.dsh-cc-save {
-  width: 100%; height: 28px; margin-top: 2px;
-  border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 9px;
-  background: rgba(52, 211, 153, 0.12);
-  color: #6ee7b7;
-  font-size: 12.5px; font-weight: 600;
+.dsh-cc-compact-btn, .dsh-cc-save {
+  width: 100%; height: 26px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
+  border-radius: var(--dsw-radius-sm, 8px);
+  background: transparent;
+  color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9));
+  font-size: 12px; line-height: 20px;
   cursor: pointer;
   transition: background 120ms ease;
 }
-.dsh-cc-save:hover { background: rgba(52, 211, 153, 0.22); }
-.dsh-cc-save[disabled] { opacity: 0.5; cursor: default; }
+.dsh-cc-compact-btn:hover, .dsh-cc-save:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); }
+.dsh-cc-compact-btn[disabled], .dsh-cc-save[disabled] { opacity: 0.5; cursor: default; }
 
-.dsh-cc-note { margin-top: 8px; font-size: 11px; line-height: 1.5; color: rgba(232, 238, 250, 0.45); }
-.dsh-cc-flash { margin-top: 8px; font-size: 12px; line-height: 1.5; border-radius: 8px; padding: 7px 9px; display: none; }
-.dsh-cc-flash-ok { display: block; background: rgba(52, 211, 153, 0.12); color: #6ee7b7; }
-.dsh-cc-flash-err { display: block; background: rgba(239, 68, 68, 0.14); color: #fca5a5; }
+.dsh-cc-field { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 12px; line-height: 20px; }
+.dsh-cc-field-label { flex: none; width: 56px; color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.55)); }
+.dsh-cc-field-value { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9)); min-width: 30px; text-align: right; }
+.dsh-cc-slider { flex: 1; height: 2px; accent-color: var(--dsw-static-blue-450, #5b8def); cursor: pointer; }
+.dsh-cc-check { accent-color: var(--dsw-static-blue-450, #5b8def); width: 13px; height: 13px; cursor: pointer; }
+.dsh-cc-hint { font-size: 11px; line-height: 16px; color: rgb(234, 179, 8); margin: 2px 0 4px; display: none; }
+.dsh-cc-hint-show { display: block; }
+
+.dsh-cc-note { margin-top: 8px; font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.45)); }
+.dsh-cc-flash { margin-top: 8px; font-size: 11px; line-height: 16px; border-radius: var(--dsw-radius-sm, 8px); padding: 5px 8px; display: none; }
+.dsh-cc-flash-ok { display: block; background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72)); }
+.dsh-cc-flash-err { display: block; background: rgba(239, 68, 68, 0.12); color: #fca5a5; }
 `
 
     const STYLE_ID = 'dsh-compaction-control-style'
@@ -216,11 +207,10 @@ window.__ModuleLoader__.load({
     }
 
     function RingSvg({ percent }) {
-      const cls = percent >= 90 ? 'dsh-cc-ring-hot' : percent >= 75 ? 'dsh-cc-ring-warn' : 'dsh-cc-ring-ok'
       return h('svg', { viewBox: '0 0 14 14', width: 14, height: 14, 'aria-hidden': true },
         h('circle', { className: 'dsh-cc-ring-track', cx: 7, cy: 7, r: RADIUS }),
         h('circle', {
-          className: `dsh-cc-ring-fill ${cls}`,
+          className: 'dsh-cc-ring-fill',
           cx: 7, cy: 7, r: RADIUS,
           strokeDasharray: `${(CIRCUMFERENCE * percent) / 100} ${CIRCUMFERENCE}`,
           transform: 'rotate(-90 7 7)',
@@ -314,15 +304,15 @@ window.__ModuleLoader__.load({
         ? 0
         : breakdown.systemTokens + breakdown.toolsTokens + breakdown.messageTokens
       const rows = [
-        { key: 'systemTokens', label: '系统提示', cls: 'dsh-cc-seg-system', value: breakdown?.systemTokens },
-        { key: 'toolsTokens', label: '工具定义', cls: 'dsh-cc-seg-tools', value: breakdown?.toolsTokens },
-        { key: 'messageTokens', label: '对话历史', cls: 'dsh-cc-seg-messages', value: breakdown?.messageTokens },
+        { key: 'systemTokens', label: '系统提示', cls: 'dsh-cc-tint-system', value: breakdown?.systemTokens },
+        { key: 'toolsTokens', label: '工具定义', cls: 'dsh-cc-tint-tools', value: breakdown?.toolsTokens },
+        { key: 'messageTokens', label: '对话历史', cls: 'dsh-cc-tint-messages', value: breakdown?.messageTokens },
       ]
       const segments = breakdownTotal > 0
         ? rows
           .map((row) => ({ ...row, width: (context.percent * row.value) / breakdownTotal }))
           .filter((row) => row.width > 0)
-        : [{ key: 'total', cls: 'dsh-cc-ring-ok', width: context.percent }]
+        : [{ key: 'total', cls: '', width: context.percent }]
 
       const onCompact = async () => {
         if (busy) return
@@ -388,16 +378,17 @@ window.__ModuleLoader__.load({
         style: pos ? { left: pos.left, top: pos.top, transform: pos.transform } : { visibility: 'hidden', left: 0, top: 0 },
       },
         h('div', { className: 'dsh-cc-head' },
-          h('span', { className: 'dsh-cc-head-pct' }, `${context.percent}%`),
           h('span', { className: 'dsh-cc-head-label' }, '上下文已用'),
+          h('span', { className: 'dsh-cc-head-pct' }, `${context.percent}%`),
           h('span', { className: 'dsh-cc-head-fig' }, `~${formatTokens(context.usedTokens)} / ${formatTokens(context.contextWindow)}`)),
         h('div', { className: 'dsh-cc-bar' },
           segments.map((seg) => h('div', { key: seg.key, className: `dsh-cc-bar-seg ${seg.cls}`, style: { width: `${seg.width}%` } }))),
         breakdownTotal > 0
           ? h('dl', { className: 'dsh-cc-rows' },
             rows.map((row) => h('div', { key: row.key, className: 'dsh-cc-row' },
-              h('span', { className: `dsh-cc-dot ${row.cls}`, 'aria-hidden': true }),
-              h('dt', null, row.label),
+              h('dt', null,
+                h('span', { className: `dsh-cc-dot ${row.cls}`, 'aria-hidden': true }),
+                row.label),
               h('dd', null, `~${formatTokens(row.value ?? 0)}`))))
           : null,
 
