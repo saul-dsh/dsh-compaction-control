@@ -1,0 +1,53 @@
+{
+  "name": "dsh-compaction-control",
+  "version": "0.1.0",
+  "description": "Context-compaction control for the DeepSeek Harness (dsh) composer: a usage ring beside the model picker with one-click manual /compact and runtime tuning of compaction-basic's auto threshold via the profile patch layer.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "deepseek",
+    "compaction",
+    "context-window",
+    "compact",
+    "cordis"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/saul-dsh/dsh-compaction-control.git"
+  },
+  "homepage": "https://github.com/saul-dsh/dsh-compaction-control#readme",
+  "bugs": {
+    "url": "https://github.com/saul-dsh/dsh-compaction-control/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/schemastery": "*"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  }
+}
