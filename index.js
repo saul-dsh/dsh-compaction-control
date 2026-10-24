@@ -139,6 +139,49 @@ function composePatch(raw, state) {
   return `${base}\n${managedBlock(state)}\n`
 }
 
+/** 移除受管块后的剩余内容；没有受管块时返回 null（无需写回）。 */
+function stripManaged(raw) {
+  const begin = raw.indexOf(MANAGED_BEGIN)
+  const end = raw.indexOf(MANAGED_END)
+  if (begin === -1 || end === -1 || end < begin) return null
+  return raw.slice(0, begin) + raw.slice(end + MANAGED_END.length)
+}
+
+/** 官方 initProfile 的用户补丁层模板（移除后文件为空时回填）。 */
+const PATCH_TEMPLATE = '# Your patch layer for this dsh profile, applied after every bundle layer:\n'
+  + '# a top-level YAML array of loader patch entries (id-targeted config\n'
+  + '# overrides, disables, and insert lists; `!!js` expressions allowed).\n'
+  + '[]\n'
+
+/** 恢复默认：从 profile 补丁层移除受管块，让 compaction-basic 回落自身默认。 */
+async function clearProfilePatch(profileName, report) {
+  const file = join(PROFILES_DIR, profileName, 'cordis.patch.yml')
+  let raw = ''
+  try { raw = await readFile(file, 'utf8') } catch { return }
+  const strippedManaged = stripManaged(raw)
+  if (strippedManaged === null) return
+  const stripped = strippedManaged
+    .split('\n')
+    .filter((line) => line.trim() !== '' && !line.trim().startsWith('#'))
+    .join('')
+    .trim()
+  const next = stripped === ''
+    ? PATCH_TEMPLATE
+    : `${strippedManaged.replace(/\s+$/, '')}\n`
+  if (Yaml) {
+    try {
+      const parsed = Yaml.parse(next)
+      if (!Array.isArray(parsed)) throw new Error('not an array')
+    } catch (error) {
+      throw new Error(`${profileName}/cordis.patch.yml 语法校验失败，未写入：${String(error?.message ?? error)}`)
+    }
+  } else {
+    report(`yaml lib unavailable, rewrote ${profileName}/cordis.patch.yml without validation`)
+  }
+  await writeFile(file, next, 'utf8')
+  return file
+}
+
 /**
  * 把受管块写入一个 profile 的 cordis.patch.yml。
  * 纯文本手术：只动 BEGIN/END 标记之间的内容，用户自己写的其他条目原样保留；
@@ -249,6 +292,21 @@ export function apply(ctx, config) {
           return
         }
 
+        if (path === '/reset' && req.method === 'POST') {
+          try {
+            const state = { ...DEFAULT_STATE }
+            await mkdir(DSH_DIR, { recursive: true })
+            await writeFile(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`, 'utf8')
+            const profiles = await listMountedProfiles()
+            for (const profileName of profiles) await clearProfilePatch(profileName, report)
+            await report(`state reset to defaults, managed block removed from: ${profiles.join(',') || 'none'}`)
+            send(200, { ok: true, state, profiles, restartRequired: true })
+          } catch (error) {
+            send(400, { error: String(error?.message ?? error) })
+          }
+          return
+        }
+
         if (path === '/compact' && req.method === 'POST') {
           if (!runtime) { send(503, { error: '压缩服务未就绪（本 profile 未挂载 compaction/agents）' }); return }
           const body = await readBody()
@@ -302,4 +360,4 @@ export function apply(ctx, config) {
 export default { name, Config, apply }
 
 /** 仅供离线自测（scripts/ 与 CI 可直接 import），运行时不使用。 */
-export const __internals = { sanitizeState, managedBlock, composePatch, DEFAULT_STATE }
+export const __internals = { sanitizeState, managedBlock, composePatch, stripManaged, PATCH_TEMPLATE, DEFAULT_STATE }

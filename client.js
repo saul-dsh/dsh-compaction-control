@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
     } catch { createPortal = null }
 
     const ENDPOINT = '/api/dsh-compaction-control'
-    const VERSION = '0.1.3'
+    const VERSION = '0.1.4'
     /** 与内置 ContextMeter 相同的环几何：14px viewBox，2px 描边。 */
     const RADIUS = 5.5
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS
@@ -100,7 +100,19 @@ window.__ModuleLoader__.load({
 
 .dsh-cc-section { border-top: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.08)); margin-top: 8px; padding-top: 6px; }
 
-.dsh-cc-compact-btn, .dsh-cc-save {
+.dsh-cc-disclose {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; height: 22px; padding: 0 2px;
+  border: none; border-radius: var(--dsw-radius-sm, 8px);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.55));
+  font-size: 12px; line-height: 20px;
+  cursor: pointer;
+}
+.dsh-cc-disclose:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72)); }
+.dsh-cc-caret { font-size: 10px; }
+
+.dsh-cc-compact-btn {
   width: 100%; height: 24px;
   border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
   border-radius: var(--dsw-radius-sm, 8px);
@@ -110,8 +122,23 @@ window.__ModuleLoader__.load({
   cursor: pointer;
   transition: background 120ms ease;
 }
-.dsh-cc-compact-btn:hover, .dsh-cc-save:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); }
-.dsh-cc-compact-btn[disabled], .dsh-cc-save[disabled] { opacity: 0.5; cursor: default; }
+.dsh-cc-compact-btn:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); }
+.dsh-cc-compact-btn[disabled] { opacity: 0.5; cursor: default; }
+
+.dsh-cc-fields { margin-top: 4px; }
+.dsh-cc-btnrow { display: flex; gap: 6px; margin-top: 4px; }
+.dsh-cc-save, .dsh-cc-reset {
+  flex: 1; height: 24px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
+  border-radius: var(--dsw-radius-sm, 8px);
+  background: transparent;
+  color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9));
+  font-size: 12px; line-height: 20px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.dsh-cc-save:hover, .dsh-cc-reset:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08)); }
+.dsh-cc-save[disabled], .dsh-cc-reset[disabled] { opacity: 0.5; cursor: default; }
 
 .dsh-cc-field { display: flex; align-items: center; gap: 8px; padding: 1px 0; font-size: 12px; line-height: 20px; }
 .dsh-cc-field-label { flex: none; width: 56px; color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.55)); }
@@ -227,6 +254,8 @@ window.__ModuleLoader__.load({
       const [draft, setDraft] = useState(null)
       const [busy, setBusy] = useState(false)
       const [saving, setSaving] = useState(false)
+      const [resetting, setResetting] = useState(false)
+      const [expanded, setExpanded] = useState(false)
       const [flash, setFlash] = useState(null)
 
       const rootRef = useRef(null)
@@ -365,6 +394,33 @@ window.__ModuleLoader__.load({
         }
       }
 
+      const onReset = async () => {
+        if (resetting) return
+        setResetting(true)
+        setFlash(null)
+        try {
+          const res = await fetch(`${ENDPOINT}/reset`, { method: 'POST', headers: { 'content-type': 'application/json' } })
+          const data = await res.json().catch(() => ({}))
+          if (!res.ok || !data.ok) {
+            setFlash({ kind: 'err', text: data?.error ?? `恢复失败（HTTP ${res.status}）` })
+          } else {
+            setSettings({ ...settings, state: data.state, profiles: data.profiles })
+            setDraft({
+              auto: data.state.auto,
+              thresholdRatio: data.state.thresholdRatio,
+              retainRatio: data.state.retainRatio,
+              hideBuiltIn: data.state.hideBuiltIn,
+            })
+            setExpanded(false)
+            setFlash({ kind: 'ok', text: '已恢复默认，重启 dsh 后生效' })
+          }
+        } catch (err) {
+          setFlash({ kind: 'err', text: `请求失败：${String(err?.message ?? err)}` })
+        } finally {
+          setResetting(false)
+        }
+      }
+
       const panel = h('div', {
         ref: panelRef,
         className: 'dsh-cc-panel',
@@ -392,42 +448,55 @@ window.__ModuleLoader__.load({
             busy ? '正在压缩…' : '立即压缩当前会话')),
 
         h('div', { className: 'dsh-cc-section' },
-          h('div', { className: 'dsh-cc-field' },
-            h('span', { className: 'dsh-cc-field-label' }, '启用'),
-            h('input', {
-              type: 'checkbox', className: 'dsh-cc-check',
-              checked: draft?.auto ?? true,
-              onChange: (e) => setDraft({ ...draft, auto: e.target.checked }),
-            }),
-            h('span', { className: 'dsh-cc-field-value' }, draft?.auto === false ? '已关' : '开')),
-          h('div', { className: 'dsh-cc-field' },
-            h('span', { className: 'dsh-cc-field-label' }, '触发阈值'),
-            h('input', {
-              type: 'range', className: 'dsh-cc-slider', min: 50, max: 95, step: 1,
-              value: Math.round((draft?.thresholdRatio ?? 0.8) * 100),
-              onChange: (e) => setDraft({ ...draft, thresholdRatio: Number(e.target.value) / 100 }),
-            }),
-            h('span', { className: 'dsh-cc-field-value' }, `${Math.round((draft?.thresholdRatio ?? 0.8) * 100)}%`)),
-          h('div', { className: 'dsh-cc-field' },
-            h('span', { className: 'dsh-cc-field-label' }, '保留比例'),
-            h('input', {
-              type: 'range', className: 'dsh-cc-slider', min: 4, max: 40, step: 1,
-              value: Math.round((draft?.retainRatio ?? 0.16) * 100),
-              onChange: (e) => setDraft({ ...draft, retainRatio: Number(e.target.value) / 100 }),
-            }),
-            h('span', { className: 'dsh-cc-field-value' }, `${Math.round((draft?.retainRatio ?? 0.16) * 100)}%`)),
-          h('div', { className: `dsh-cc-hint ${(draft?.retainRatio ?? 0) >= (draft?.thresholdRatio ?? 1) ? 'dsh-cc-hint-show' : ''}` },
-            '保留比例需小于触发阈值'),
-          h('div', { className: 'dsh-cc-field' },
-            h('span', { className: 'dsh-cc-field-label' }, '内置圆环'),
-            h('input', {
-              type: 'checkbox', className: 'dsh-cc-check',
-              checked: draft?.hideBuiltIn ?? true,
-              onChange: (e) => setDraft({ ...draft, hideBuiltIn: e.target.checked }),
-            }),
-            h('span', { className: 'dsh-cc-field-value' }, draft?.hideBuiltIn === false ? '显示' : '已隐藏')),
-          h('button', { type: 'button', className: 'dsh-cc-save', disabled: saving || !draft, onClick: onSave },
-            saving ? '保存中…' : '保存设置')),
+          h('button', {
+            type: 'button',
+            className: 'dsh-cc-disclose',
+            'aria-expanded': expanded,
+            onClick: () => setExpanded(!expanded),
+          },
+          h('span', null, '自定义压缩'),
+          h('span', { className: 'dsh-cc-caret' }, expanded ? '▾' : '▸')),
+          expanded ? h('div', { className: 'dsh-cc-fields' },
+            h('div', { className: 'dsh-cc-field' },
+              h('span', { className: 'dsh-cc-field-label' }, '启用'),
+              h('input', {
+                type: 'checkbox', className: 'dsh-cc-check',
+                checked: draft?.auto ?? true,
+                onChange: (e) => setDraft({ ...draft, auto: e.target.checked }),
+              }),
+              h('span', { className: 'dsh-cc-field-value' }, draft?.auto === false ? '已关' : '开')),
+            h('div', { className: 'dsh-cc-field' },
+              h('span', { className: 'dsh-cc-field-label' }, '触发阈值'),
+              h('input', {
+                type: 'range', className: 'dsh-cc-slider', min: 50, max: 95, step: 1,
+                value: Math.round((draft?.thresholdRatio ?? 0.8) * 100),
+                onChange: (e) => setDraft({ ...draft, thresholdRatio: Number(e.target.value) / 100 }),
+              }),
+              h('span', { className: 'dsh-cc-field-value' }, `${Math.round((draft?.thresholdRatio ?? 0.8) * 100)}%`)),
+            h('div', { className: 'dsh-cc-field' },
+              h('span', { className: 'dsh-cc-field-label' }, '保留比例'),
+              h('input', {
+                type: 'range', className: 'dsh-cc-slider', min: 4, max: 40, step: 1,
+                value: Math.round((draft?.retainRatio ?? 0.16) * 100),
+                onChange: (e) => setDraft({ ...draft, retainRatio: Number(e.target.value) / 100 }),
+              }),
+              h('span', { className: 'dsh-cc-field-value' }, `${Math.round((draft?.retainRatio ?? 0.16) * 100)}%`)),
+            h('div', { className: `dsh-cc-hint ${(draft?.retainRatio ?? 0) >= (draft?.thresholdRatio ?? 1) ? 'dsh-cc-hint-show' : ''}` },
+              '保留比例需小于触发阈值'),
+            h('div', { className: 'dsh-cc-field' },
+              h('span', { className: 'dsh-cc-field-label' }, '内置圆环'),
+              h('input', {
+                type: 'checkbox', className: 'dsh-cc-check',
+                checked: draft?.hideBuiltIn ?? true,
+                onChange: (e) => setDraft({ ...draft, hideBuiltIn: e.target.checked }),
+              }),
+              h('span', { className: 'dsh-cc-field-value' }, draft?.hideBuiltIn === false ? '显示' : '已隐藏')),
+            h('div', { className: 'dsh-cc-btnrow' },
+              h('button', { type: 'button', className: 'dsh-cc-save', disabled: saving || !draft, onClick: onSave },
+                saving ? '保存中…' : '保存设置'),
+              h('button', { type: 'button', className: 'dsh-cc-reset', disabled: resetting, onClick: onReset },
+                resetting ? '恢复中…' : '恢复默认')))
+            : null),
 
         flash ? h('div', { className: `dsh-cc-flash dsh-cc-flash-${flash.kind}` }, flash.text) : null)
 
