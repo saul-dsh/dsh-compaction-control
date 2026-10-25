@@ -69,15 +69,29 @@ window.__ModuleLoader__.load({
   position: fixed; z-index: 1100; box-sizing: border-box;
   width: min(264px, calc(100vw - 24px)); max-height: 70vh; overflow-y: auto;
   padding: 12px;
-  border: 0; border-radius: var(--dsw-radius-lg, 14px);
-  background: var(--dsw-specific-menu, rgba(28, 28, 34, 0.97));
-  backdrop-filter: var(--dsw-menu-backdrop-filter, none);
-  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.08));
-  box-shadow: var(--dsw-elevation-prominent, 0 12px 40px rgba(0, 0, 0, 0.45));
+  border: 0; border-radius: 14px;
+  /* 底色写死 0.94，不用 --dsw-specific-menu：Windows 默认值是 rgba(67,69,74,.45)，
+     那是给带 MenuSurface 底衬的官方菜单用的；插件 portal 到 body 没有底衬，
+     45% 一旦 backdrop-filter 失效就发灰糊在背景上。0.94 取自 dsh 的 macOS 档。 */
+  background: rgba(248, 249, 250, 0.94);
+  backdrop-filter: blur(40px) saturate(150%);
+  -webkit-backdrop-filter: blur(40px) saturate(150%);
+  box-shadow:
+    0 0 0 0.5px rgba(0, 0, 0, 0.07),
+    0 3px 8px 0 rgba(0, 0, 0, 0.04),
+    0 0 20px 0 rgba(0, 0, 0, 0.05);
   font-size: 12px; line-height: 20px;
-  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
+  color: rgba(28, 30, 34, 0.86);
   cursor: default;
   animation: dsh-cc-in 140ms ease-out both;
+}
+body[data-ds-dark-theme] .dsh-cc-panel {
+  background: rgba(48, 49, 54, 0.94);
+  box-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.10),
+    0 3px 8px 0 rgba(0, 0, 0, 0.04),
+    0 0 20px 0 rgba(0, 0, 0, 0.05);
+  color: rgba(232, 238, 250, 0.72);
 }
 /* 只动 opacity：展开方向由内联 transform 控制，keyframes 不能碰 transform */
 @keyframes dsh-cc-in { from { opacity: 0; } to { opacity: 1; } }
