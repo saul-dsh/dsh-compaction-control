@@ -4,6 +4,8 @@ English | [中文](README.md)
 
 A **context-compaction control center** for the dsh (DeepSeek Harness) composer: a context-usage ring beside the model picker that opens a panel with **one-click manual compaction**, **runtime tuning of the auto-compaction threshold**, and an optional **hide for the built-in bottom-right ring**.
 
+![Context usage and compaction panel](docs/panel.png)
+
 ## Why
 
 dsh's built-in auto compaction (`compaction-basic`) triggers only at 80% of the context window on turn boundaries, with parameters fixed inside the profile composition; the only manual entry is the `/compact` slash command. This plugin turns both into visual controls on the input bar:
