@@ -48,7 +48,7 @@ window.__ModuleLoader__.load({
     } catch { createPortal = null }
 
     const ENDPOINT = '/api/dsh-compaction-control'
-    const VERSION = '0.2.3'
+    const VERSION = '0.2.4'
     /** 官方环几何 14px viewBox / 2 单位描边；纯图标无百分比文字撑视觉重量，渲染尺寸放大到 18px（描边随比例 ≈2.6px）。 */
     const RADIUS = 5.5
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS
@@ -334,6 +334,9 @@ body[data-ds-dark-theme] .dsh-cc-panel {
       let row = send.parentElement
       for (let i = 0; row && i < 3 && !row.contains(picker); i++) row = row.parentElement
       if (!row || !row.contains(picker)) return null
+      // 容器方向检查：竖排容器（0.1.6 陷阱）在选行阶段就直接否决。
+      const rowStyle = getComputedStyle(row)
+      if (rowStyle.flexDirection === 'column' || rowStyle.display === 'block') return null
       let wrapper = picker
       for (let i = 0; i < 4 && wrapper.parentElement !== row; i++) wrapper = wrapper.parentElement
       if (wrapper.parentElement !== row) return null
@@ -352,15 +355,17 @@ body[data-ds-dark-theme] .dsh-cc-panel {
           target.row.insertBefore(host, target.wrapper)
         }
         if (host.style.display === 'none') host.style.display = ''
-        // 几何防线（0.1.6 落错竖排容器的教训）：插入后必须与选择器同一水
-        // 平线，否则撤销并永弃此路径。比较中线而非上缘——空壳 host 高度为
-        // 0，上缘对齐会误判。
+        // 几何防线（0.1.6 落错竖排容器的教训）：与选择器不同一水平线则撤销
+        // 并永弃此路径。只在 host 已有内容后判定——刚插入的空壳高度为 0，
+        // 行容器非垂直居中时中线必错位，会把正确落点误杀（0.2.3 真机实锤：
+        // hostTop 792 vs 选择器中线 810 被拒，圆环跌回剪贴板旁）。空壳先接
+        // 受落点，1s 轮询在内容渲染后复核。
         const hr = host.getBoundingClientRect()
         const pr = target.picker.getBoundingClientRect()
-        if (Math.abs(hr.top + hr.height / 2 - (pr.top + pr.height / 2)) > 8) {
+        if (hr.height > 0 && Math.abs(hr.top + hr.height / 2 - (pr.top + pr.height / 2)) > 8) {
           host.remove()
           pickerRowBroken = true
-          report('picker-row-rejected', { hostTop: Math.round(hr.top), pickerTop: Math.round(pr.top) })
+          report('picker-row-rejected', { hostTop: Math.round(hr.top), pickerTop: Math.round(pr.top), hostH: Math.round(hr.height) })
         } else {
           tracePlacement(host, 'picker-flow', pr)
           return
