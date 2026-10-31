@@ -250,39 +250,50 @@ body[data-ds-dark-theme] .dsh-cc-panel {
       ))
     }
 
-    /** 几何校正：把 host 拉到锚点按钮的左缘 + 垂直中线（只在错位时动）。 */
+    /**
+     * 几何校正（0.2.0 起为 fixed 定位同步）：host 脱离布局流挂 body，
+     * 坐标完全由锚点按钮矩形驱动——布局流怎么挤都影响不到它（0.1.6/0.1.7
+     * 的 transform 校正在 rc.5 布局下仍会被 flex wrap 掉行，根治即脱流）。
+     */
     function correctHost(host) {
       const anchor = findModelButton()
-      if (!anchor) return
-      host.style.transform = ''
+      if (!anchor || anchor.offsetParent === null) {
+        // 输入区隐藏/切页：圆环跟着隐藏，避免悬空在视口上。
+        if (host.style.display !== 'none') host.style.display = 'none'
+        return
+      }
+      if (host.style.display === 'none') host.style.display = ''
       const a = anchor.getBoundingClientRect()
       const r = host.getBoundingClientRect()
-      let dx = 0
-      let dy = 0
-      if (a.height > 0 && r.height > 0) {
-        const centerDelta = a.top + a.height / 2 - (r.top + r.height / 2)
-        if (Math.abs(centerDelta) >= 2) dy = Math.round(centerDelta)
-      }
-      // 横向只在错位时校正：与按钮重叠、或离按钮左缘超过 24px（列容器会把
-      // host 甩到容器左缘）。正常 flex 行的 12px gap 不动。
-      if (a.width > 0 && r.width > 0) {
-        const gap = a.left - r.right
-        if (gap < -1 || gap > 24) dx = Math.round(a.left - r.right - 4)
-      }
-      if (dx !== 0 || dy !== 0) host.style.transform = `translate(${dx}px, ${dy}px)`
+      if (r.width <= 0 || r.height <= 0) return
+      const left = Math.round(a.left - r.width - 8)
+      const top = Math.round(a.top + (a.height - r.height) / 2)
+      host.style.left = `${left}px`
+      host.style.top = `${top}px`
     }
 
     /**
-     * 把 host 节点插到模型选择器紧左边，复制其 flex order（等 order 时按 DOM 序）。
-     * 这个运行时模型按钮的父容器不保证是工具条 flex 行（实测会把圆环顶到
-     * 上一行），所以插入后做几何自校正——不依赖任何容器布局假设。
+     * 锚定（0.2.0 起挂 body + fixed）：不再插入模型选择器旁的布局流——
+     * 那条路在宿主改 flex 布局时随时会把圆环挤到下一行。
      */
     function anchorHost(host) {
+      host.style.position = 'fixed'
+      host.style.zIndex = '50'
+      if (host.parentNode !== document.body) document.body.appendChild(host)
       const anchor = findModelButton()
-      if (!anchor?.parentNode) return false
-      const order = getComputedStyle(anchor).order
-      if (order && order !== '0') host.style.order = order
-      anchor.parentNode.insertBefore(host, anchor)
+      if (!anchor) {
+        // rc.5 兼容取证：锚定失败记录当时输入区的按钮候选，便于对照判别式。
+        const dock = document.querySelector('[data-composer-dock]')
+        const scope = dock?.parentElement ?? document
+        const candidates = [...scope.querySelectorAll('button')]
+          .filter((b) => b.isConnected && b.offsetParent !== null)
+          .slice(0, 12)
+          .map((b) => `${b.getAttribute('aria-label') ?? b.textContent?.trim().slice(0, 12) ?? '?'}|menu=${b.getAttribute('aria-haspopup') !== null}`)
+        report('anchor-miss', { candidates: candidates.join(' ; ').slice(0, 600) })
+        host.style.display = 'none'
+        return true
+      }
+      host.style.display = ''
       correctHost(host)
       return true
     }
@@ -381,22 +392,22 @@ body[data-ds-dark-theme] .dsh-cc-panel {
       useEffect(() => {
         const hostNode = document.createElement('span')
         hostNode.className = 'dsh-cc-host'
-        let anchored = anchorHost(hostNode)
-        if (!anchored) {
-          const dock = document.querySelector('[data-composer-dock]')
-          ;(dock?.parentNode ?? document.body).appendChild(hostNode)
-        }
+        anchorHost(hostNode)
         setHost(hostNode)
         const reposition = () => {
-          if (!hostNode.isConnected) anchored = anchorHost(hostNode)
+          if (!hostNode.isConnected) anchorHost(hostNode)
           else correctHost(hostNode)
         }
         const observer = new MutationObserver(reposition)
         observer.observe(document.body, { childList: true, subtree: true })
         window.addEventListener('resize', reposition)
+        // 兜底：flex 空间变化等纯布局漂移不触发 DOM mutation，1s 轮询补漏
+        // （fixed 同步只是两次 getBoundingClientRect，开销可忽略）。
+        const poll = setInterval(reposition, 1000)
         return () => {
           observer.disconnect()
           window.removeEventListener('resize', reposition)
+          clearInterval(poll)
           hostNode.remove()
           setHost(null)
         }
