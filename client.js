@@ -18,16 +18,18 @@
  *     特征收严（0.2.2）= dialog 按钮 + svg 带圆 + 文本恰为「NN%」——
  *     0.2.1 的宽泛特征在真机命中了 dock 里的未知按钮，文本白名单把误伤
  *     半径收到最小。MutationObserver 在宿主重挂时补隐藏。
- *   - 落位（0.2.3 起为布局流插入，参照 = 模型选择器本身）：host 插进选
- *     择器所在行、紧贴其左侧，占真实布局空间，与任何按钮结构上不可能重
- *     叠——0.2.0/0.2.1 两轮 fixed 定位不占流先后压住剪贴板和未知按钮；
- *     0.2.2 以剪贴板为参照也错（日志实证 composer.dock 渲染在会话状态行
- *     y≈1004，而非输入 dock 行 y≈796）。选择器所在行以发送按钮（aria-
- *     label「发送消息」，实测特征）定位，插入后做水平线几何防线（0.1.6
- *     落错竖排容器的教训），失败回落剪贴板同排、再次 fixed、最后隐藏。
- *     另：本环永远渲染——0.2.1 的「hideBuiltIn=false 时退场」门已拆
- *     （持久化值恰为 false，环被卸成空壳占位，即用户看到的剪贴板左侧
- *     大间隔）；该开关现在只管官方环的隐藏。
+ *   - 落位（0.2.5 定稿）：圆环直接作为 conversation.input.right 槽位内容
+ *     渲染——已装 app.asar 的 InputBar 源码实锤 standardControls 里
+ *     renderSlot("conversation.input.right") 与 renderSlot("conversation.
+ *     input.model")（模型选择器）是 JSX 兄弟节点且前者在前，槽位位置即
+ *     「模型选择器紧左侧」，官方契约保证，零坐标手术。0.1.6 起四轮方案
+ *     全废：fixed 不占布局流必压按钮；「发送左侧最靠右下拉」会把状态行
+ *     的官方环/费用按钮误当选择器（不同行的按钮在窗口坐标里也分左右）；
+ *     剪贴板所在 composer.dock 实际渲染在会话状态行。另：本环永远渲染
+ *     ——0.2.1 的「hideBuiltIn=false 时退场」门已拆（持久化值恰为 false
+ *     曾把环卸成空壳占位）；该开关现在只管官方环的隐藏。占用比读取改
+ *     `||`（projectedTokens 可为合法 0，`??` 不会回落 pressureTokens，
+ *     真机出现过 0% 环而官方 17%）。
  *
  * 诊断：boot/register/crash 上报服务端 /diag，落
  * ~/.dsh/compaction-control-debug.log；window.__dshCompactionControl 供检查。
@@ -48,7 +50,7 @@ window.__ModuleLoader__.load({
     } catch { createPortal = null }
 
     const ENDPOINT = '/api/dsh-compaction-control'
-    const VERSION = '0.2.4'
+    const VERSION = '0.2.5'
     /** 官方环几何 14px viewBox / 2 单位描边；纯图标无百分比文字撑视觉重量，渲染尺寸放大到 18px（描边随比例 ≈2.6px）。 */
     const RADIUS = 5.5
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS
@@ -219,30 +221,18 @@ body[data-ds-dark-theme] .dsh-cc-panel {
       return `${scale(value / 1000000)}M`
     }
 
-    /** contextPressure → 占用（与 ui-conversation 的 contextOccupancy 同算法）。 */
+    /** contextPressure → 占用（与 ui-conversation 的 contextOccupancy 同算法）。
+     * 用 || 而非 ??：projectedTokens 可为合法 0（未投影出增量），此时必须
+     * 回落 pressureTokens——`??` 会把 0 当有效值挡住回落，真机出现过官方
+     * 17% 而本环 0% 的空圈。 */
     function occupancy(pressure) {
-      const used = pressure?.projectedTokens ?? pressure?.pressureTokens
+      const used = pressure?.projectedTokens || pressure?.pressureTokens
       if (used === undefined || pressure?.contextWindow === undefined) return null
       return {
         percent: Math.min(100, Math.round((used / pressure.contextWindow) * 100)),
         usedTokens: used,
         contextWindow: pressure.contextWindow,
       }
-    }
-
-    /**
-     * 官方占用环按钮的识别特征：dialog 按钮 + 双 circle svg。rc.5 起官方
-     * 环从 composer dock 移到了状态行，特征不再限定容器、全文匹配；必须
-     * 排除我们自己的触发按钮（同款几何，全文扫描会扫到自己）。
-     */
-    function findBuiltInMeterButtons() {
-      const found = []
-      for (const btn of document.querySelectorAll('button[aria-haspopup="dialog"]')) {
-        if (btn.classList.contains('dsh-cc-trigger')) continue
-        const svg = btn.querySelector('svg')
-        if (svg && svg.querySelectorAll('circle').length >= 2) found.push(btn)
-      }
-      return found
     }
 
     /**
@@ -263,167 +253,6 @@ body[data-ds-dark-theme] .dsh-cc-panel {
       return found
     }
 
-    /** 剪贴板按钮（dsh-composer 片段入口）：自家组件，落位参照物零猜测。 */
-    function findClipboardAnchor() {
-      const btn = document.querySelector('.dsh-cs-btn')
-      if (!btn?.isConnected) return null
-      const span = btn.closest('.dsh-cs-anchor') ?? btn.parentElement
-      if (!span?.parentNode) return null
-      return { row: span.parentNode, span }
-    }
-
-    /**
-     * 模型选择器（fixed 回落模式用）：发送按钮（aria-label「发送消息」，
-     * 实测特征）左侧最靠右的下拉按钮。不再猜模型按钮的 label——它实际是
-     * 模型名（如「DeepSeek-V4.1-Flash」），「选择模型」判别式从未命中过。
-     */
-    function findPickerButton() {
-      const send = [...document.querySelectorAll('button[aria-label]')]
-        .find((b) => /发送消息|send message/i.test(b.getAttribute('aria-label') ?? ''))
-      if (!send) return null
-      const s = send.getBoundingClientRect()
-      const popups = [...document.querySelectorAll('button[aria-haspopup]')].filter((b) =>
-        b.isConnected && b.offsetParent !== null
-        && !b.classList.contains('dsh-cc-trigger')
-        && b.getBoundingClientRect().right <= s.left + 1)
-      if (!popups.length) return null
-      return popups.reduce((right, b) => (
-        b.getBoundingClientRect().right > right.getBoundingClientRect().right ? b : right
-      ))
-    }
-
-    /** 落位 trace 节流 10s（w/h 用来区分「环渲染了」还是「空壳占位」）。 */
-    function tracePlacement(host, mode, anchor) {
-      const now = Date.now()
-      if (tracePlacement.last && now - tracePlacement.last < 10_000) return
-      tracePlacement.last = now
-      const r = host.getBoundingClientRect()
-      report('correct', {
-        mode,
-        left: Math.round(r.left), top: Math.round(r.top),
-        w: Math.round(r.width), h: Math.round(r.height),
-        anchorLeft: anchor ? Math.round(anchor.left) : undefined,
-        anchorTop: anchor ? Math.round(anchor.top) : undefined,
-      })
-    }
-
-    /** 几何防线否决记录：模型选择器行插入被证明落错容器后，本会话不再重试（防每秒重插闪烁）。 */
-    let pickerRowBroken = false
-
-    /**
-     * 模型选择器所在行（布局流首选落点）。0.2.2 日志实证：composer.dock 的
-     * 剪贴板渲染在会话状态行（y≈1004）而非输入 dock 行（y≈796），以它为参
-     * 照圆环会落错行——必须以模型选择器自身为参照。行容器由发送按钮定位
-     * （aria-label「发送消息」，实测可靠特征），再从选择器按钮上爬到该行的
-     * 直接子级包装，插到它前面 = 模型选择器紧左侧。
-     */
-    function findPickerRowAnchor() {
-      if (pickerRowBroken) return null
-      const send = [...document.querySelectorAll('button[aria-label]')]
-        .find((b) => /发送消息|send message/i.test(b.getAttribute('aria-label') ?? ''))
-      if (!send?.isConnected) return null
-      const s = send.getBoundingClientRect()
-      const popups = [...document.querySelectorAll('button[aria-haspopup]')].filter((b) =>
-        b.isConnected && b.offsetParent !== null
-        && !b.classList.contains('dsh-cc-trigger')
-        && b.getBoundingClientRect().right <= s.left + 1)
-      if (!popups.length) return null
-      const picker = popups.reduce((right, b) => (
-        b.getBoundingClientRect().right > right.getBoundingClientRect().right ? b : right
-      ))
-      let row = send.parentElement
-      for (let i = 0; row && i < 3 && !row.contains(picker); i++) row = row.parentElement
-      if (!row || !row.contains(picker)) return null
-      // 容器方向检查：竖排容器（0.1.6 陷阱）在选行阶段就直接否决。
-      const rowStyle = getComputedStyle(row)
-      if (rowStyle.flexDirection === 'column' || rowStyle.display === 'block') return null
-      let wrapper = picker
-      for (let i = 0; i < 4 && wrapper.parentElement !== row; i++) wrapper = wrapper.parentElement
-      if (wrapper.parentElement !== row) return null
-      return { row, wrapper, picker }
-    }
-
-    /**
-     * 落位（幂等，observer/1s 轮询反复调用）：首选模型选择器所在行（几何
-     * 防线守门）→ 剪贴板同排 → fixed 模型选择器左侧 → 隐藏并留候选清单。
-     */
-    function placeHost(host) {
-      const target = findPickerRowAnchor()
-      if (target) {
-        if (host.style.position) { host.style.position = ''; host.style.zIndex = '' }
-        if (host.parentNode !== target.row || host.nextElementSibling !== target.wrapper) {
-          target.row.insertBefore(host, target.wrapper)
-        }
-        if (host.style.display === 'none') host.style.display = ''
-        // 几何防线（0.1.6 落错竖排容器的教训）：与选择器不同一水平线则撤销
-        // 并永弃此路径。只在 host 已有内容后判定——刚插入的空壳高度为 0，
-        // 行容器非垂直居中时中线必错位，会把正确落点误杀（0.2.3 真机实锤：
-        // hostTop 792 vs 选择器中线 810 被拒，圆环跌回剪贴板旁）。空壳先接
-        // 受落点，1s 轮询在内容渲染后复核。
-        const hr = host.getBoundingClientRect()
-        const pr = target.picker.getBoundingClientRect()
-        if (hr.height > 0 && Math.abs(hr.top + hr.height / 2 - (pr.top + pr.height / 2)) > 8) {
-          host.remove()
-          pickerRowBroken = true
-          report('picker-row-rejected', { hostTop: Math.round(hr.top), pickerTop: Math.round(pr.top), hostH: Math.round(hr.height) })
-        } else {
-          tracePlacement(host, 'picker-flow', pr)
-          return
-        }
-      }
-      const clip = findClipboardAnchor()
-      if (clip) {
-        if (host.style.position) { host.style.position = ''; host.style.zIndex = '' }
-        if (host.parentNode !== clip.row || host.nextElementSibling !== clip.span) {
-          clip.row.insertBefore(host, clip.span)
-          const now = Date.now()
-          if (!placeHost.lastAttach || now - placeHost.lastAttach > 10_000) {
-            placeHost.lastAttach = now
-            report('flow-attach', {})
-          }
-        }
-        if (host.style.display === 'none') host.style.display = ''
-        tracePlacement(host, 'clip-flow', null)
-        return
-      }
-      const picker = findPickerButton()
-      if (!picker || picker.offsetParent === null) {
-        if (host.style.display !== 'none') {
-          host.style.display = 'none'
-          if (host.parentNode !== document.body) {
-            host.style.position = 'fixed'
-            host.style.zIndex = '50'
-            document.body.appendChild(host)
-          }
-          if (!picker) {
-            const dock = document.querySelector('[data-composer-dock]')
-            const candidates = [...(dock ?? document).querySelectorAll('button')]
-              .filter((b) => b.isConnected && b.offsetParent !== null)
-              .slice(0, 12)
-              .map((b) => `${b.getAttribute('aria-label') ?? b.textContent?.trim().slice(0, 12) ?? '?'}|menu=${b.getAttribute('aria-haspopup') !== null}`)
-            report('anchor-miss', { candidates: candidates.join(' ; ').slice(0, 600) })
-          } else {
-            report('hidden', { reason: 'anchor-invisible' })
-          }
-        }
-        return
-      }
-      if (host.style.position !== 'fixed') { host.style.position = 'fixed'; host.style.zIndex = '50' }
-      if (host.parentNode !== document.body) document.body.appendChild(host)
-      if (host.style.display === 'none') host.style.display = ''
-      const a = picker.getBoundingClientRect()
-      const r = host.getBoundingClientRect()
-      if (r.width <= 0) return
-      host.style.left = `${Math.round(a.left - r.width - 8)}px`
-      host.style.top = `${Math.round(a.top + (a.height - r.height) / 2)}px`
-      tracePlacement(host, 'fixed', a)
-    }
-
-    /**
-     * 几何校正（0.2.0 起为 fixed 定位同步）：host 脱离布局流挂 body，
-     * 坐标完全由锚点按钮矩形驱动——布局流怎么挤都影响不到它（0.1.6/0.1.7
-     * 的 transform 校正在 rc.5 布局下仍会被 flex wrap 掉行，根治即脱流）。
-     */
     let hideObserver = null
     let hideRefcount = 0
     // visibility:hidden 而非 display:none：官方环占位保留，状态行 flex 不
@@ -515,34 +344,21 @@ body[data-ds-dark-theme] .dsh-cc-panel {
 
       const rootRef = useRef(null)
       const panelRef = useRef(null)
-      const [host, setHost] = useState(null)
 
       const context = occupancy(pressure)
 
-      // 宿主节点：插成剪贴板按钮的同排兄弟（布局流，见 placeHost）。React
-      // 只渲染进我们自己的 host，host 本身由我们搬运，React 不知情；被宿主
-      // 重渲染清掉时 MutationObserver/1s 轮询会重新插回。
+      // 挂载取证：0.2.5 起圆环是 conversation.input.right 槽位的直接内容，
+      // 位置由官方 InputBar JSX 兄弟顺序保证（紧在模型选择器 renderSlot
+      // 之前），不再有任何坐标手术；这条 trace 只为确认槽位真的渲染了。
+      const mountReported = useRef(false)
       useEffect(() => {
-        const hostNode = document.createElement('span')
-        hostNode.className = 'dsh-cc-host'
-        placeHost(hostNode)
-        setHost(hostNode)
-        // 幂等落位：React 清掉被插入的 host / 行重排 / 窗口变化都直接重插。
-        const reposition = () => placeHost(hostNode)
-        const observer = new MutationObserver(reposition)
-        observer.observe(document.body, { childList: true, subtree: true })
-        window.addEventListener('resize', reposition)
-        // 兜底：flex 空间变化等纯布局漂移不触发 DOM mutation，1s 轮询补漏
-        // （fixed 同步只是两次 getBoundingClientRect，开销可忽略）。
-        const poll = setInterval(reposition, 1000)
-        return () => {
-          observer.disconnect()
-          window.removeEventListener('resize', reposition)
-          clearInterval(poll)
-          hostNode.remove()
-          setHost(null)
-        }
-      }, [])
+        if (mountReported.current || context === null) return
+        mountReported.current = true
+        const rect = rootRef.current?.getBoundingClientRect()
+        report('in-slot-mount', rect
+          ? { left: Math.round(rect.left), top: Math.round(rect.top), w: Math.round(rect.width), h: Math.round(rect.height) }
+          : {})
+      })
 
       // 挂载即拉一次服务端状态：hideBuiltIn 要在用户打开面板前就生效。
       useEffect(() => {
@@ -606,10 +422,9 @@ body[data-ds-dark-theme] .dsh-cc-panel {
         return () => clearTimeout(timer)
       }, [flash])
 
-      // 0.2.3 拆除 0.2.1 的退场门（hideBuiltIn=false 时本环卸载）：持久化值
-      // 恰为 false，环被卸成空 host 占位（用户看到的「剪贴板左侧大间隔」即
-      // 空壳）。本环与官方环如今分处两行、永不重叠，该开关只管官方环隐藏。
-      if (context === null || host === null || createPortal === null) return null
+      // 本环永远渲染：0.2.1 的「hideBuiltIn=false 时退场」门已拆——持久化
+      // 值恰为 false 曾把环卸成空壳占位。该开关只管官方环的隐藏。
+      if (context === null || createPortal === null) return null
 
       const breakdownTotal = breakdown === undefined
         ? 0
@@ -781,20 +596,18 @@ body[data-ds-dark-theme] .dsh-cc-panel {
 
         flash ? h('div', { className: `dsh-cc-flash dsh-cc-flash-${flash.kind}` }, flash.text) : null)
 
-      return createPortal(
-        h('span', { ref: rootRef, className: 'dsh-cc-root' },
-          h('button', {
-            type: 'button',
-            className: 'dsh-cc-trigger',
-            'aria-label': `上下文已用 ${context.percent}%，打开压缩控制`,
-            'aria-haspopup': 'dialog',
-            'aria-expanded': open,
-            title: `上下文已用 ${context.percent}%`,
-            onClick: () => setOpen(!open),
-          },
-          h(RingSvg, { percent: context.percent })),
-          open ? createPortal(panel, document.body) : null),
-        host)
+      return h('span', { ref: rootRef, className: 'dsh-cc-root' },
+        h('button', {
+          type: 'button',
+          className: 'dsh-cc-trigger',
+          'aria-label': `上下文已用 ${context.percent}%，打开压缩控制`,
+          'aria-haspopup': 'dialog',
+          'aria-expanded': open,
+          title: `上下文已用 ${context.percent}%`,
+          onClick: () => setOpen(!open),
+        },
+        h(RingSvg, { percent: context.percent })),
+        open ? createPortal(panel, document.body) : null)
     }
 
     return {
