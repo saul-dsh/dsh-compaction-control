@@ -259,7 +259,10 @@ body[data-ds-dark-theme] .dsh-cc-panel {
       const anchor = findModelButton()
       if (!anchor || anchor.offsetParent === null) {
         // 输入区隐藏/切页：圆环跟着隐藏，避免悬空在视口上。
-        if (host.style.display !== 'none') host.style.display = 'none'
+        if (host.style.display !== 'none') {
+          host.style.display = 'none'
+          report('hidden', { reason: anchor ? 'anchor-invisible' : 'anchor-gone' })
+        }
         return
       }
       if (host.style.display === 'none') host.style.display = ''
@@ -270,6 +273,13 @@ body[data-ds-dark-theme] .dsh-cc-panel {
       const top = Math.round(a.top + (a.height - r.height) / 2)
       host.style.left = `${left}px`
       host.style.top = `${top}px`
+      // 坐标 trace 节流 10s：验证 fixed 定位是否落点正确（用户报告圆环
+      // 仍在状态行——需要真实数值判定是坐标错还是官方圆环未被隐藏）。
+      const now = Date.now()
+      if (!correctHost.lastTrace || now - correctHost.lastTrace > 10_000) {
+        correctHost.lastTrace = now
+        report('correct', { left, top, anchorLeft: Math.round(a.left), anchorTop: Math.round(a.top), ringW: Math.round(r.width) })
+      }
     }
 
     /**
