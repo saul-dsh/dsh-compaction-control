@@ -13,10 +13,13 @@
  *          的编程入口，等价免打字）。
  *       2. 自动压缩调节（auto 开关 / 触发阈值 / 保留比例）→ POST
  *          /state，服务端写 profile 用户补丁层，重启后生效。
- *   - hideBuiltIn（默认开）：运行时把 dock 条里内置圆环按钮 display:none。
+ *   - hideBuiltIn（默认开）：运行时把官方占用环按钮 visibility:hidden。
  *     内置圆环是 InputBar 硬编码（不在槽位里），没有官方关闭开关；识别
- *     特征 = [data-composer-dock] 里带双 circle svg 的 dialog 按钮，
- *     MutationObserver 在 dock 重挂时补隐藏。
+ *     特征 = 带 dialog aria-haspopup + 双 circle svg 的按钮（rc.5 起官方
+ *     环从 composer dock 移到了状态行，特征不再限定容器），MutationObserver
+ *     在宿主重挂时补隐藏。0.2.1 起圆环位置 = 官方环原位居中替换：模型
+ *     选择器左侧被 composer.dock 的按钮（剪贴板等）占据，fixed 落点会盖
+ *     住它们；官方环本身就是上下文用量语义，接管它最贴切。
  *
  * 诊断：boot/register/crash 上报服务端 /diag，落
  * ~/.dsh/compaction-control-debug.log；window.__dshCompactionControl 供检查。
@@ -37,7 +40,7 @@ window.__ModuleLoader__.load({
     } catch { createPortal = null }
 
     const ENDPOINT = '/api/dsh-compaction-control'
-    const VERSION = '0.1.9'
+    const VERSION = '0.2.1'
     /** 官方环几何 14px viewBox / 2 单位描边；纯图标无百分比文字撑视觉重量，渲染尺寸放大到 18px（描边随比例 ≈2.6px）。 */
     const RADIUS = 5.5
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS
@@ -219,29 +222,35 @@ body[data-ds-dark-theme] .dsh-cc-panel {
       }
     }
 
-    /** dock 里内置圆环的识别特征：dialog 按钮 + 双 circle svg。 */
+    /**
+     * 官方占用环按钮的识别特征：dialog 按钮 + 双 circle svg。rc.5 起官方
+     * 环从 composer dock 移到了状态行，特征不再限定容器、全文匹配；必须
+     * 排除我们自己的触发按钮（同款几何，全文扫描会扫到自己）。
+     */
     function findBuiltInMeterButtons() {
       const found = []
-      for (const dock of document.querySelectorAll('[data-composer-dock]')) {
-        for (const btn of dock.querySelectorAll('button[aria-haspopup="dialog"]')) {
-          const svg = btn.querySelector('svg')
-          if (svg && svg.querySelectorAll('circle').length >= 2) found.push(btn)
-        }
+      for (const btn of document.querySelectorAll('button[aria-haspopup="dialog"]')) {
+        if (btn.classList.contains('dsh-cc-trigger')) continue
+        const svg = btn.querySelector('svg')
+        if (svg && svg.querySelectorAll('circle').length >= 2) found.push(btn)
       }
       return found
     }
 
     /**
-     * 模型选择器按钮：rc.5 起优先按 aria-label 精确匹配（「选择模型，当前…」
-     * / "Select model…"）——「最靠右的下拉」启发式在 rc.5 失效：官方占用环
-     * 移到了状态行且比模型选择器更靠右，会把圆环锚到状态行去。
-     * 回落：dock 内（不含状态行）最靠右的下拉按钮，发送按钮按语义排除。
+     * 圆环锚点：0.2.1 起优先接管官方占用环的位置（状态行末尾，居中替换）
+     * ——模型选择器左侧被 composer.dock 的按钮占据，fixed 落点会盖住剪贴
+     * 板图标（0.2.0 真机实锤）。官方环不可见时回落模型选择器左侧，并上报
+     * 回落事实便于跟进。visibility:hidden 的官方环 rect 依然有效，锚定
+     * 不受隐藏影响。
      */
-    function findModelButton() {
+    function findAnchorButton() {
+      const meter = findBuiltInMeterButtons()[0]
+      if (meter?.isConnected) return { button: meter, mode: 'meter' }
       const dock = document.querySelector('[data-composer-dock]')
       const labeled = [...document.querySelectorAll('button[aria-label]')].find((b) =>
         /选择模型|select model/i.test(b.getAttribute('aria-label') ?? ''))
-      if (labeled?.isConnected) return labeled
+      if (labeled?.isConnected) return { button: labeled, mode: 'model' }
       const scope = dock ?? document
       const isSend = (b) => /send|发送|排队|steer/i.test(b.getAttribute('aria-label') ?? '')
       const menus = [...scope.querySelectorAll('button')].filter((b) => {
@@ -249,9 +258,12 @@ body[data-ds-dark-theme] .dsh-cc-panel {
         return b.getAttribute('aria-haspopup') !== null || /▾/.test(b.textContent ?? '')
       })
       if (!menus.length) return null
-      return menus.reduce((right, b) => (
-        b.getBoundingClientRect().right > right.getBoundingClientRect().right ? b : right
-      ))
+      return {
+        button: menus.reduce((right, b) => (
+          b.getBoundingClientRect().right > right.getBoundingClientRect().right ? b : right
+        )),
+        mode: 'model',
+      }
     }
 
     /**
@@ -260,8 +272,8 @@ body[data-ds-dark-theme] .dsh-cc-panel {
      * 的 transform 校正在 rc.5 布局下仍会被 flex wrap 掉行，根治即脱流）。
      */
     function correctHost(host) {
-      const anchor = findModelButton()
-      if (!anchor || anchor.offsetParent === null) {
+      const anchor = findAnchorButton()
+      if (!anchor || anchor.button.offsetParent === null) {
         // 输入区隐藏/切页：圆环跟着隐藏，避免悬空在视口上。
         if (host.style.display !== 'none') {
           host.style.display = 'none'
@@ -270,33 +282,35 @@ body[data-ds-dark-theme] .dsh-cc-panel {
         return
       }
       if (host.style.display === 'none') host.style.display = ''
-      const a = anchor.getBoundingClientRect()
+      const a = anchor.button.getBoundingClientRect()
       const r = host.getBoundingClientRect()
       if (r.width <= 0 || r.height <= 0) return
-      const left = Math.round(a.left - r.width - 8)
+      // meter 模式居中替换官方环原位；model 回落模式放模型选择器左侧。
+      const left = anchor.mode === 'meter'
+        ? Math.round(a.left + (a.width - r.width) / 2)
+        : Math.round(a.left - r.width - 8)
       const top = Math.round(a.top + (a.height - r.height) / 2)
       host.style.left = `${left}px`
       host.style.top = `${top}px`
-      // 坐标 trace 节流 10s：验证 fixed 定位是否落点正确（用户报告圆环
-      // 仍在状态行——需要真实数值判定是坐标错还是官方圆环未被隐藏）。
+      // 坐标 trace 节流 10s：验证 fixed 定位是否落点正确。
       const now = Date.now()
       if (!correctHost.lastTrace || now - correctHost.lastTrace > 10_000) {
         correctHost.lastTrace = now
-        report('correct', { left, top, anchorLeft: Math.round(a.left), anchorTop: Math.round(a.top), ringW: Math.round(r.width) })
+        report('correct', { mode: anchor.mode, left, top, anchorLeft: Math.round(a.left), anchorTop: Math.round(a.top), ringW: Math.round(r.width) })
       }
     }
 
     /**
-     * 锚定（0.2.0 起挂 body + fixed）：不再插入模型选择器旁的布局流——
-     * 那条路在宿主改 flex 布局时随时会把圆环挤到下一行。
+     * 锚定（0.2.0 起挂 body + fixed）：不再插入布局流——那条路在宿主改
+     * flex 布局时随时会把圆环挤到下一行。
      */
     function anchorHost(host) {
       host.style.position = 'fixed'
       host.style.zIndex = '50'
       if (host.parentNode !== document.body) document.body.appendChild(host)
-      const anchor = findModelButton()
+      const anchor = findAnchorButton()
       if (!anchor) {
-        // rc.5 兼容取证：锚定失败记录当时输入区的按钮候选，便于对照判别式。
+        // 兼容取证：锚定失败记录当时输入区的按钮候选，便于对照判别式。
         const dock = document.querySelector('[data-composer-dock]')
         const scope = dock?.parentElement ?? document
         const candidates = [...scope.querySelectorAll('button')]
@@ -314,13 +328,19 @@ body[data-ds-dark-theme] .dsh-cc-panel {
 
     let hideObserver = null
     let hideRefcount = 0
+    // visibility:hidden 而非 display:none：官方环占位保留，状态行 flex 不
+    // 会把费用/用量按钮挤过来盖住我们的环。
+    let knownMeters = new Set()
+    function hideBuiltInOnce(force) {
+      if (!force && [...knownMeters].every((b) => b.isConnected && b.style.visibility === 'hidden')) return
+      knownMeters = new Set(findBuiltInMeterButtons())
+      for (const btn of knownMeters) btn.style.visibility = 'hidden'
+    }
     function acquireDockHide() {
       hideRefcount += 1
-      for (const btn of findBuiltInMeterButtons()) btn.style.display = 'none'
+      hideBuiltInOnce(true)
       if (!hideObserver) {
-        hideObserver = new MutationObserver(() => {
-          for (const btn of findBuiltInMeterButtons()) btn.style.display = 'none'
-        })
+        hideObserver = new MutationObserver(() => hideBuiltInOnce(false))
         hideObserver.observe(document.body, { childList: true, subtree: true })
       }
     }
@@ -328,7 +348,8 @@ body[data-ds-dark-theme] .dsh-cc-panel {
       hideRefcount = Math.max(0, hideRefcount - 1)
       if (hideRefcount === 0) {
         if (hideObserver) { hideObserver.disconnect(); hideObserver = null }
-        for (const btn of findBuiltInMeterButtons()) btn.style.display = ''
+        for (const btn of knownMeters) btn.style.visibility = ''
+        knownMeters = new Set()
       }
     }
 
@@ -446,10 +467,10 @@ body[data-ds-dark-theme] .dsh-cc-panel {
         return () => { alive = false }
       }, [])
 
-      // 隐藏内置圆环的生命周期跟 draft.hideBuiltIn 走（面板里可切换）。
+      // 隐藏官方环的生命周期跟 draft.hideBuiltIn 走（面板里可切换）。
+      // 未加载（undefined）也按默认隐藏——任何加载失败场景都不出现双环。
       useEffect(() => {
-        if (draft?.hideBuiltIn === undefined) return undefined
-        if (!draft.hideBuiltIn) return undefined
+        if (draft?.hideBuiltIn === false) return undefined
         acquireDockHide()
         return () => releaseDockHide()
       }, [draft?.hideBuiltIn])
@@ -490,6 +511,8 @@ body[data-ds-dark-theme] .dsh-cc-panel {
       }, [flash])
 
       if (context === null || host === null || createPortal === null) return null
+      // 用户显式关闭隐藏（想看官方环）时我们的环退场——两者占据同一位置。
+      if (draft?.hideBuiltIn === false) return null
 
       const breakdownTotal = breakdown === undefined
         ? 0
@@ -645,7 +668,7 @@ body[data-ds-dark-theme] .dsh-cc-panel {
             h('div', { className: `dsh-cc-hint ${(draft?.retainRatio ?? 0) >= (draft?.thresholdRatio ?? 1) ? 'dsh-cc-hint-show' : ''}` },
               '保留比例需小于触发阈值'),
             h('div', { className: 'dsh-cc-field' },
-              h('span', { className: 'dsh-cc-field-label' }, '内置圆环'),
+              h('span', { className: 'dsh-cc-field-label' }, '官方圆环'),
               h('input', {
                 type: 'checkbox', className: 'dsh-cc-check',
                 checked: draft?.hideBuiltIn ?? true,
