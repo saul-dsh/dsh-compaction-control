@@ -232,13 +232,17 @@ body[data-ds-dark-theme] .dsh-cc-panel {
     }
 
     /**
-     * 模型选择器按钮 = 输入区里视觉最靠右的下拉按钮（发送按钮按语义排除，
-     * prompt-enhancer 同款判别）。槽位顺序在这个运行时不可控，所以圆环
-     * 用自建 host 节点锚定到它紧左边。
+     * 模型选择器按钮：rc.5 起优先按 aria-label 精确匹配（「选择模型，当前…」
+     * / "Select model…"）——「最靠右的下拉」启发式在 rc.5 失效：官方占用环
+     * 移到了状态行且比模型选择器更靠右，会把圆环锚到状态行去。
+     * 回落：dock 内（不含状态行）最靠右的下拉按钮，发送按钮按语义排除。
      */
     function findModelButton() {
       const dock = document.querySelector('[data-composer-dock]')
-      const scope = dock?.parentElement ?? document
+      const labeled = [...document.querySelectorAll('button[aria-label]')].find((b) =>
+        /选择模型|select model/i.test(b.getAttribute('aria-label') ?? ''))
+      if (labeled?.isConnected) return labeled
+      const scope = dock ?? document
       const isSend = (b) => /send|发送|排队|steer/i.test(b.getAttribute('aria-label') ?? '')
       const menus = [...scope.querySelectorAll('button')].filter((b) => {
         if (isSend(b) || !b.isConnected) return false
