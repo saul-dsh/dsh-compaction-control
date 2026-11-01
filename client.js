@@ -373,11 +373,31 @@ body[data-ds-dark-theme] .dsh-cc-panel {
               thresholdRatio: data.state.thresholdRatio,
               retainRatio: data.state.retainRatio,
               hideBuiltIn: data.state.hideBuiltIn,
+              checkpoint: data.state.checkpoint,
             })
           })
           .catch((err) => report('state-error', { message: String(err?.message ?? err) }))
         return () => { alive = false }
       }, [])
+
+      // 压缩前自动落档布防：占用率上穿「阈值-5%」的升沿 POST 一次 arm=true，
+      // 回落（压缩完成/新会话）时 arm=false。服务端在下一次 pre-step 注入
+      // 落档指令，agent 自己把项目状态写进工作区 checkpoint.md。
+      const armRef = useRef(false)
+      useEffect(() => {
+        if (context === null || !sessionId) return
+        const thresholdPct = Math.round((draft?.thresholdRatio ?? 0.8) * 100)
+        const above = context.percent >= thresholdPct - 5
+        if (above === armRef.current) return
+        armRef.current = above
+        void fetch(`${ENDPOINT}/checkpoint-arm`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ sessionId: String(sessionId), arm: above }),
+        }).then((res) => (res.ok ? res.json() : null))
+          .then((data) => { if (data && data.armed) report('checkpoint-armed', { sessionId, percent: context.percent }) })
+          .catch((err) => report('checkpoint-arm-error', { message: String(err?.message ?? err) }))
+      }, [context?.percent, sessionId, draft?.thresholdRatio])
 
       // 隐藏官方环的生命周期跟 draft.hideBuiltIn 走（面板里可切换）。
       // 未加载（undefined）也按默认隐藏——任何加载失败场景都不出现双环。
@@ -587,6 +607,14 @@ body[data-ds-dark-theme] .dsh-cc-panel {
                 onChange: (e) => setDraft({ ...draft, hideBuiltIn: e.target.checked }),
               }),
               h('span', { className: 'dsh-cc-field-value' }, draft?.hideBuiltIn === false ? '显示' : '已隐藏')),
+            h('div', { className: 'dsh-cc-field' },
+              h('span', { className: 'dsh-cc-field-label' }, '压缩前落档'),
+              h('input', {
+                type: 'checkbox', className: 'dsh-cc-check',
+                checked: draft?.checkpoint ?? true,
+                onChange: (e) => setDraft({ ...draft, checkpoint: e.target.checked }),
+              }),
+              h('span', { className: 'dsh-cc-field-value' }, draft?.checkpoint === false ? '关闭' : '写 checkpoint.md')),
             h('div', { className: 'dsh-cc-btnrow' },
               h('button', { type: 'button', className: 'dsh-cc-save', disabled: saving || !draft, onClick: onSave },
                 saving ? '保存中…' : '保存设置'),

@@ -27,6 +27,7 @@
  */
 
 import Schema from '@deepseek-ai/schemastery'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { createRequire } from 'node:module'
 import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -42,7 +43,7 @@ const STATE_FILE = join(DSH_DIR, 'compaction-control.json')
 const DIAG_LOG = join(DSH_DIR, 'compaction-control-debug.log')
 
 /** 与 compaction-basic 的默认对齐（thresholdRatio 0.8 / retainRatio 0.16 / auto）。 */
-const DEFAULT_STATE = { auto: true, thresholdRatio: 0.8, retainRatio: 0.16, hideBuiltIn: true }
+const DEFAULT_STATE = { auto: true, thresholdRatio: 0.8, retainRatio: 0.16, hideBuiltIn: true, checkpoint: true }
 
 const MANAGED_BEGIN = '# BEGIN dsh-compaction-control (managed)'
 const MANAGED_END = '# END dsh-compaction-control'
@@ -73,6 +74,7 @@ function sanitizeState(input) {
     thresholdRatio: ratio(input?.thresholdRatio, DEFAULT_STATE.thresholdRatio, 0.3, 0.99, '触发阈值'),
     retainRatio: ratio(input?.retainRatio, DEFAULT_STATE.retainRatio, 0.02, 0.5, '保留比例'),
     hideBuiltIn: input?.hideBuiltIn === undefined ? DEFAULT_STATE.hideBuiltIn : Boolean(input.hideBuiltIn),
+    checkpoint: input?.checkpoint === undefined ? DEFAULT_STATE.checkpoint : Boolean(input.checkpoint),
   }
   // compaction-basic 加载期硬约束：retainRatio >= thresholdRatio 直接抛错。
   if (state.retainRatio >= state.thresholdRatio) {
@@ -234,6 +236,38 @@ export function apply(ctx, config) {
   say(`server boot, enabled=${config.enabled !== false}`)
   void report(`server boot enabled=${config.enabled !== false}`)
 
+  // 压缩前自动落档：客户端圆环在占用率上穿「阈值-5%」时布防，本进程在
+  // 该会话下一次模型调用前往消息尾追加落档指令——agent 用自己的文件工具
+  // 把项目状态写进工作区 checkpoint.md，随后 compaction-basic 照常压缩。
+  // 只注入一次（注入即解除布防；占用回落后客户端重新布防）。
+  const armedSessions = new Set()
+  const CHECKPOINT_MARKER = 'dsh-auto-checkpoint'
+  const CHECKPOINT_TEXT = [
+    '【自动落档】上下文即将压缩。请先把当前任务状态写入工作区文件 `checkpoint.md`（覆盖旧内容）：',
+    '任务目标、已完成事项、待办事项、关键决定与约束、涉及的重要文件路径。',
+    '写完落档后，再回答上一条消息的问题。（dsh-auto-checkpoint）',
+  ].join('\n')
+
+  ctx.on('agent/pre-step', async ({ agent, signal }, next) => {
+    const decision = await next()
+    try {
+      if (!decision || decision.kind !== 'enter' || !Array.isArray(decision.messages)) return decision
+      const sessionId = String(agent?.sessionId ?? '')
+      if (!sessionId || !armedSessions.has(sessionId)) return decision
+      const state = await readState()
+      if (state.checkpoint === false) { armedSessions.delete(sessionId); return decision }
+      const tail = decision.messages.slice(-3).map((m) => JSON.stringify(m?.content ?? '')).join('')
+      armedSessions.delete(sessionId)
+      if (tail.includes(CHECKPOINT_MARKER)) return decision
+      const message = createUserMessage({ content: [{ type: 'text', text: CHECKPOINT_TEXT }] })
+      await report(`checkpoint injected session=${sessionId} msgs=${decision.messages.length}`)
+      return { ...decision, messages: [...decision.messages, message] }
+    } catch (error) {
+      await report(`checkpoint pre-step failed: ${String(error?.message ?? error).slice(0, 200)}`)
+      return decision
+    }
+  })
+
   // compaction/agents 属于可选依赖：base bundle 没带它们时路由仍注册，
   // /compact 返回 503，面板其余功能（状态展示、参数保存）不受影响。
   let runtime = null
@@ -263,6 +297,22 @@ export function apply(ctx, config) {
         if (path === '/diag' && req.method === 'POST') {
           await report(String((await readBody())?.line ?? '').slice(0, 2000))
           send(200, { ok: true })
+          return
+        }
+
+        // 压缩前落档布防：客户端占用率上穿阈值-5% 时 arm=true（升沿只发一次），
+        // 占用回落后 arm=false。服务端只记标记，注入发生在下一次 pre-step。
+        if (path === '/checkpoint-arm' && req.method === 'POST') {
+          const body = await readBody()
+          const sessionId = String(body?.sessionId ?? '')
+          if (!sessionId) { send(400, { error: '缺少 sessionId' }); return }
+          const arm = body?.arm === true
+          const state = await readState()
+          if (arm && state.checkpoint === false) { send(200, { ok: true, armed: false, reason: 'checkpoint-disabled' }); return }
+          if (arm) armedSessions.add(sessionId)
+          else armedSessions.delete(sessionId)
+          await report(`checkpoint ${arm ? 'armed' : 'disarmed'} session=${sessionId}`)
+          send(200, { ok: true, armed })
           return
         }
 

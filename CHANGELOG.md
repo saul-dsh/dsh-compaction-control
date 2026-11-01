@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 — 2026-11-01
+
+### 压缩前自动落档（参考市场 auto-checkpoint 思路）
+
+- 占用率上穿「触发阈值-5%」时（客户端圆环升沿布防），下一次模型调用前在
+  消息尾注入一条落档指令：agent 用自己的文件工具把任务状态写进工作区
+  `checkpoint.md`（目标/已完成/待办/关键决定/文件路径），随后 compaction-basic
+  照常压缩——压缩丢细节也有落档兜底，新会话可从 checkpoint.md 接力。
+- 只注入一次：注入即解除布防，占用回落后客户端重新布防；注入前查消息尾
+  防重复。面板「自定义压缩 ▸」新增「压缩前落档」开关（默认开），状态存
+  compaction-control.json。事件与注入全量落 compaction-control-debug.log。
+- 新 peer 依赖 @deepseek-ai/dsh-llm（createUserMessage）。
+
 ## 0.2.0 — 2026-10-31
 
 ### 圆环锚定改为 fixed 定位（rc.5 布局下掉行根治）
