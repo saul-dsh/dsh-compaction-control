@@ -62,6 +62,9 @@ window.__ModuleLoader__.load({
     const CSS = `
 .dsh-cc-host { display: inline-flex; align-items: center; flex: none; margin: 0 2px; }
 .dsh-cc-root { display: inline-flex; }
+.dsh-cc-pending .dsh-cc-trigger { opacity: 0.65; }
+.dsh-cc-pending .dsh-cc-trigger:hover,
+.dsh-cc-pending .dsh-cc-trigger[aria-expanded='true'] { opacity: 1; }
 .dsh-cc-trigger {
   display: inline-flex; align-items: center; justify-content: center;
   flex: none; height: 28px; padding: 0 6px;
@@ -345,7 +348,10 @@ body[data-ds-dark-theme] .dsh-cc-panel {
       const rootRef = useRef(null)
       const panelRef = useRef(null)
 
-      const context = occupancy(pressure)
+      // 圆环常驻：新会话/空会话还没有 contextPressure 时用 0% 占位，
+      // 避免「模型选择器左侧的环莫名消失」；有数据后自动切回真实占用。
+      const measured = occupancy(pressure)
+      const context = measured ?? { percent: 0, usedTokens: 0, contextWindow: undefined }
 
       // 挂载取证：0.2.5 起圆环是 conversation.input.right 槽位的直接内容，
       // 位置由官方 InputBar JSX 兄弟顺序保证（紧在模型选择器 renderSlot
@@ -444,7 +450,7 @@ body[data-ds-dark-theme] .dsh-cc-panel {
 
       // 本环永远渲染：0.2.1 的「hideBuiltIn=false 时退场」门已拆——持久化
       // 值恰为 false 曾把环卸成空壳占位。该开关只管官方环的隐藏。
-      if (context === null || createPortal === null) return null
+      if (createPortal === null) return null
 
       const breakdownTotal = breakdown === undefined
         ? 0
@@ -555,7 +561,8 @@ body[data-ds-dark-theme] .dsh-cc-panel {
         h('div', { className: 'dsh-cc-head' },
           h('span', { className: 'dsh-cc-head-label' }, '上下文已用'),
           h('span', { className: 'dsh-cc-head-pct' }, `${context.percent}%`),
-          h('span', { className: 'dsh-cc-head-fig' }, `~${formatTokens(context.usedTokens)} / ${formatTokens(context.contextWindow)}`)),
+          h('span', { className: 'dsh-cc-head-fig' },
+            measured ? `~${formatTokens(context.usedTokens)} / ${formatTokens(context.contextWindow)}` : '当前会话暂无上下文数据')),
         h('div', { className: 'dsh-cc-bar' },
           segments.map((seg) => h('div', { key: seg.key, className: `dsh-cc-bar-seg ${seg.cls}`, style: { width: `${seg.width}%` } }))),
         breakdownTotal > 0
@@ -624,14 +631,14 @@ body[data-ds-dark-theme] .dsh-cc-panel {
 
         flash ? h('div', { className: `dsh-cc-flash dsh-cc-flash-${flash.kind}` }, flash.text) : null)
 
-      return h('span', { ref: rootRef, className: 'dsh-cc-root' },
+      return h('span', { ref: rootRef, className: measured ? 'dsh-cc-root' : 'dsh-cc-root dsh-cc-pending' },
         h('button', {
           type: 'button',
           className: 'dsh-cc-trigger',
-          'aria-label': `上下文已用 ${context.percent}%，打开压缩控制`,
+          'aria-label': measured ? `上下文已用 ${context.percent}%，打开压缩控制` : '上下文数据加载中，打开压缩控制',
           'aria-haspopup': 'dialog',
           'aria-expanded': open,
-          title: `上下文已用 ${context.percent}%`,
+          title: measured ? `上下文已用 ${context.percent}%` : '当前会话暂无上下文数据',
           onClick: () => setOpen(!open),
         },
         h(RingSvg, { percent: context.percent })),

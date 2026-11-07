@@ -10,10 +10,10 @@ dsh（DeepSeek Harness）输入栏的**上下文压缩控制中心**：在模型
 
 dsh 内置的自动压缩（`compaction-basic`）只在 token 压力达到窗口 80% 时于回合边界触发，参数固定在 profile 组合里；手动压缩只有 `/compact` 斜杠命令一个入口。本插件把两者都变成输入栏上的可视化操作：
 
-- **圆环**：与内置 ContextMeter 同款几何（14px 环 + 百分比），数据走官方 `contextPressure` / `contextBreakdown` 会话投影。
+- **圆环**：与内置 ContextMeter 同款几何（14px 环 + 百分比），数据走官方 `contextPressure` / `contextBreakdown` 会话投影。新会话/首轮前还没有压力数据时显示 0% 半透明占位，不再整颗消失。
 - **立即压缩**：调用官方 `ctx.compaction.compactNow(agent, signal)`，等价 `/compact` 命令，免打字。仅空闲会话可用，正忙/失败原因会在面板里用中文提示。
 - **自动压缩调节**：启用开关 + 触发阈值（50%~95%）+ 保留比例（4%~40%）。保存后写入每个挂载本插件的 profile 的**用户补丁层**（`~/.dsh/profiles/<name>/cordis.patch.yml`，id 定向覆盖 `compaction-basic` 的 config），**重启 dsh 后生效**。
-- **隐藏内置圆环**：内置圆环硬编码在输入卡下方的 dock 条里（不在槽位中、无官方开关）。开启后本插件在运行时将其 `display:none`，界面只保留模型选择器旁边这一颗。
+- **隐藏内置圆环**：内置圆环硬编码在输入卡下方的 dock 条里（不在槽位中、无官方开关）。开启后本插件在运行时将其 `visibility:hidden`（保留占位，避免状态行按钮被挤位），界面只保留模型选择器旁边这一颗。
 
 ## 安装
 
